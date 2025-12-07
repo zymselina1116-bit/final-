@@ -12,15 +12,8 @@
         }
 
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
             overflow: hidden;
-            background: #1a1a1a;
-        }
-
-        #container {
-            width: 100vw;
-            height: 100vh;
-            position: relative;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
         }
 
         canvas {
@@ -31,191 +24,54 @@
             position: absolute;
             top: 0;
             left: 0;
-            width: 100%;
-            height: 100%;
         }
 
-        /* Creation Interface */
-        #creationInterface {
+        #drawingInterface {
             position: absolute;
             top: 0;
             left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(26, 26, 26, 0.95);
+            width: 100vw;
+            height: 100vh;
+            background: rgba(0, 0, 0, 0.95);
             display: none;
-            flex-direction: column;
             align-items: center;
             justify-content: center;
+            flex-direction: column;
             z-index: 100;
         }
 
-        #creationInterface.active {
+        #drawingInterface.active {
             display: flex;
-        }
-
-        .creation-header {
-            color: #FFFCF1;
-            font-size: 24px;
-            margin-bottom: 30px;
-            font-weight: 300;
-            letter-spacing: 2px;
-        }
-
-        .mode-selection {
-            display: flex;
-            gap: 40px;
-            margin-bottom: 40px;
-        }
-
-        .mode-button {
-            padding: 15px 40px;
-            background: transparent;
-            border: 2px solid #FFDC53;
-            color: #FFFCF1;
-            font-size: 16px;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            letter-spacing: 1px;
-        }
-
-        .mode-button:hover {
-            background: #FFDC53;
-            color: #1a1a1a;
-        }
-
-        .mode-button.active {
-            background: #FFDC53;
-            color: #1a1a1a;
         }
 
         #drawingCanvas {
-            border: 2px solid #FFDC53;
             background: white;
             cursor: crosshair;
-            display: none;
+            box-shadow: 0 0 40px rgba(255, 220, 83, 0.3);
         }
 
-        #drawingCanvas.active {
-            display: block;
-        }
-
-        .canvas-instructions {
-            color: #FFFCF1;
-            margin-top: 20px;
-            font-size: 14px;
-            opacity: 0.7;
-        }
-
-        .action-buttons {
-            display: flex;
-            gap: 20px;
+        .draw-button {
             margin-top: 30px;
-        }
-
-        .action-button {
-            padding: 12px 30px;
+            padding: 15px 50px;
             background: #FFDC53;
             border: none;
-            color: #1a1a1a;
-            font-size: 14px;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            letter-spacing: 1px;
-        }
-
-        .action-button:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 4px 12px rgba(255, 220, 83, 0.3);
-        }
-
-        .action-button.secondary {
-            background: transparent;
-            border: 2px solid #FFDC53;
-            color: #FFFCF1;
-        }
-
-        /* Lantern Type Selection */
-        .lantern-selection {
-            display: none;
-            flex-direction: column;
-            align-items: center;
-        }
-
-        .lantern-selection.active {
-            display: flex;
-        }
-
-        .lantern-options {
-            display: flex;
-            gap: 60px;
-            margin-top: 20px;
-        }
-
-        .lantern-option {
-            text-align: center;
-            cursor: pointer;
-            padding: 20px;
-            border: 2px solid transparent;
-            transition: all 0.3s ease;
-        }
-
-        .lantern-option:hover {
-            border-color: #FFDC53;
-        }
-
-        .lantern-preview {
-            width: 150px;
-            height: 150px;
-            margin-bottom: 15px;
-        }
-
-        .lantern-name {
-            color: #FFFCF1;
             font-size: 16px;
+            cursor: pointer;
+            color: #000;
             letter-spacing: 1px;
+        }
+
+        .draw-button:hover {
+            background: #FFE680;
         }
     </style>
 </head>
 <body>
-    <div id="container">
-        <canvas id="mainCanvas"></canvas>
+    <canvas id="mainCanvas"></canvas>
 
-        <!-- Creation Interface -->
-        <div id="creationInterface">
-            <div class="creation-header">Create Your Silhouette</div>
-
-            <!-- Mode Selection -->
-            <div class="mode-selection">
-                <button class="mode-button active" data-mode="draw">Draw</button>
-                <button class="mode-button" data-mode="cutout">Cutout</button>
-            </div>
-
-            <!-- Drawing Canvas -->
-            <canvas id="drawingCanvas" width="400" height="400" class="active"></canvas>
-            <div class="canvas-instructions">Draw your silhouette shape</div>
-
-            <!-- Action Buttons -->
-            <div class="action-buttons">
-                <button class="action-button secondary" onclick="app.clearDrawing()">Clear</button>
-                <button class="action-button" onclick="app.finishDrawing()">Continue</button>
-            </div>
-
-            <!-- Lantern Type Selection (hidden initially) -->
-            <div class="lantern-selection">
-                <div class="creation-header">Choose Your Lantern</div>
-                <div class="lantern-options">
-                    <div class="lantern-option" onclick="app.createLantern('carousel')">
-                        <canvas class="lantern-preview" width="150" height="150"></canvas>
-                        <div class="lantern-name">Carousel</div>
-                    </div>
-                    <div class="lantern-option" onclick="app.createLantern('sixsided')">
-                        <canvas class="lantern-preview" width="150" height="150"></canvas>
-                        <div class="lantern-name">Six-Sided</div>
-                    </div>
-                </div>
-            </div>
-        </div>
+    <div id="drawingInterface">
+        <canvas id="drawingCanvas" width="300" height="300"></canvas>
+        <button class="draw-button" onclick="app.finishDrawing()">Create Lantern</button>
     </div>
 
     <script>
@@ -225,33 +81,31 @@
             width: 0,
             height: 0,
 
-            // Drawing interface
+            // Drawing
             drawingCanvas: null,
             drawingCtx: null,
             isDrawing: false,
-            drawingMode: 'draw',
             drawingPoints: [],
             currentSilhouette: null,
 
             // Lanterns
             lanterns: [],
-            focusedLantern: null,
-
-            // Animation
-            time: 0,
-            animationId: null,
+            activeLantern: null,
 
             // Interaction
             isDragging: false,
-            dragTarget: null,
-            dragOffset: { x: 0, y: 0 },
+            isRotating: false,
+            lastMouseX: 0,
+
+            // Animation
+            time: 0,
 
             // Colors
             colors: {
                 wall: '#FFFCF1',
                 table: '#B5AB9C',
-                lanternMetal: '#FFDC53',
-                background: '#1a1a1a'
+                tableDark: '#9A907F',
+                lanternGold: '#FFDC53'
             },
 
             init() {
@@ -265,7 +119,6 @@
                 window.addEventListener('resize', () => this.resize());
 
                 this.setupEventListeners();
-                this.setupDrawingCanvas();
                 this.animate();
             },
 
@@ -277,39 +130,28 @@
             },
 
             setupEventListeners() {
+                // Main canvas
                 this.canvas.addEventListener('mousedown', (e) => this.handleMouseDown(e));
                 this.canvas.addEventListener('mousemove', (e) => this.handleMouseMove(e));
-                this.canvas.addEventListener('mouseup', (e) => this.handleMouseUp(e));
-                this.canvas.addEventListener('dblclick', (e) => this.handleDoubleClick(e));
+                this.canvas.addEventListener('mouseup', () => this.handleMouseUp());
 
-                // Mode buttons
-                document.querySelectorAll('.mode-button').forEach(btn => {
-                    btn.addEventListener('click', (e) => {
-                        document.querySelectorAll('.mode-button').forEach(b => b.classList.remove('active'));
-                        btn.classList.add('active');
-                        this.drawingMode = btn.dataset.mode;
-                        this.clearDrawing();
-                    });
-                });
-            },
-
-            setupDrawingCanvas() {
+                // Drawing canvas
                 this.drawingCanvas.addEventListener('mousedown', (e) => {
                     this.isDrawing = true;
                     const rect = this.drawingCanvas.getBoundingClientRect();
-                    const x = e.clientX - rect.left;
-                    const y = e.clientY - rect.top;
-                    this.drawingPoints = [{ x, y }];
+                    this.drawingPoints = [{
+                        x: e.clientX - rect.left,
+                        y: e.clientY - rect.top
+                    }];
                 });
 
                 this.drawingCanvas.addEventListener('mousemove', (e) => {
                     if (!this.isDrawing) return;
-
                     const rect = this.drawingCanvas.getBoundingClientRect();
-                    const x = e.clientX - rect.left;
-                    const y = e.clientY - rect.top;
-                    this.drawingPoints.push({ x, y });
-
+                    this.drawingPoints.push({
+                        x: e.clientX - rect.left,
+                        y: e.clientY - rect.top
+                    });
                     this.updateDrawing();
                 });
 
@@ -318,437 +160,276 @@
                 });
             },
 
-            updateDrawing() {
-                const ctx = this.drawingCtx;
-                ctx.clearRect(0, 0, 400, 400);
-
-                if (this.drawingPoints.length < 2) return;
-
-                ctx.fillStyle = 'black';
-                ctx.beginPath();
-
-                if (this.drawingMode === 'draw') {
-                    ctx.moveTo(this.drawingPoints[0].x, this.drawingPoints[0].y);
-                    for (let i = 1; i < this.drawingPoints.length; i++) {
-                        ctx.lineTo(this.drawingPoints[i].x, this.drawingPoints[i].y);
-                    }
-                    ctx.closePath();
-                    ctx.fill();
-                } else if (this.drawingMode === 'cutout') {
-                    // Cutout mode - symmetric around vertical center
-                    const centerX = 200;
-                    ctx.moveTo(centerX, this.drawingPoints[0].y);
-
-                    // Right side
-                    for (let i = 0; i < this.drawingPoints.length; i++) {
-                        const dx = this.drawingPoints[i].x - centerX;
-                        ctx.lineTo(centerX + Math.abs(dx), this.drawingPoints[i].y);
-                    }
-
-                    // Left side (mirrored)
-                    for (let i = this.drawingPoints.length - 1; i >= 0; i--) {
-                        const dx = this.drawingPoints[i].x - centerX;
-                        ctx.lineTo(centerX - Math.abs(dx), this.drawingPoints[i].y);
-                    }
-
-                    ctx.closePath();
-                    ctx.fill();
-                }
-            },
-
-            clearDrawing() {
-                this.drawingPoints = [];
-                this.drawingCtx.clearRect(0, 0, 400, 400);
-            },
-
-            finishDrawing() {
-                if (this.drawingPoints.length < 3) {
-                    alert('Please draw a shape first');
-                    return;
-                }
-
-                // Capture the silhouette
-                this.currentSilhouette = this.drawingCtx.getImageData(0, 0, 400, 400);
-
-                // Generate 6 frames
-                this.generateFrames();
-
-                // Show lantern selection
-                document.querySelector('.mode-selection').style.display = 'none';
-                document.querySelector('#drawingCanvas').style.display = 'none';
-                document.querySelector('.canvas-instructions').style.display = 'none';
-                document.querySelector('.action-buttons').style.display = 'none';
-                document.querySelector('.lantern-selection').classList.add('active');
-
-                // Render previews
-                this.renderLanternPreviews();
-            },
-
-            generateFrames() {
-                // Generate 6 variations of the silhouette for animation
-                this.silhouetteFrames = [];
-
-                for (let i = 0; i < 6; i++) {
-                    const canvas = document.createElement('canvas');
-                    canvas.width = 400;
-                    canvas.height = 400;
-                    const ctx = canvas.getContext('2d');
-
-                    // Apply transformations
-                    ctx.save();
-                    ctx.translate(200, 200);
-
-                    const angle = (i / 6) * Math.PI * 0.1; // Subtle rotation
-                    const scale = 1 + Math.sin(i / 6 * Math.PI * 2) * 0.05; // Subtle scaling
-
-                    ctx.rotate(angle);
-                    ctx.scale(scale, scale);
-                    ctx.translate(-200, -200);
-
-                    ctx.putImageData(this.currentSilhouette, 0, 0);
-                    ctx.restore();
-
-                    this.silhouetteFrames.push(canvas);
-                }
-            },
-
-            renderLanternPreviews() {
-                const previews = document.querySelectorAll('.lantern-preview');
-
-                // Carousel preview
-                const carouselCtx = previews[0].getContext('2d');
-                carouselCtx.fillStyle = this.colors.lanternMetal;
-                carouselCtx.beginPath();
-                carouselCtx.arc(75, 50, 40, 0, Math.PI * 2);
-                carouselCtx.fill();
-                carouselCtx.strokeStyle = this.colors.lanternMetal;
-                carouselCtx.lineWidth = 2;
-                for (let i = 0; i < 6; i++) {
-                    const angle = (i / 6) * Math.PI * 2;
-                    const x = 75 + Math.cos(angle) * 35;
-                    const y = 50 + Math.sin(angle) * 35;
-                    carouselCtx.beginPath();
-                    carouselCtx.moveTo(x, y);
-                    carouselCtx.lineTo(x, y + 30);
-                    carouselCtx.stroke();
-                    carouselCtx.fillStyle = '#333';
-                    carouselCtx.fillRect(x - 5, y + 30, 10, 15);
-                }
-
-                // Six-sided preview
-                const sixsidedCtx = previews[1].getContext('2d');
-                sixsidedCtx.fillStyle = this.colors.lanternMetal;
-                sixsidedCtx.strokeStyle = this.colors.lanternMetal;
-                sixsidedCtx.lineWidth = 3;
-                sixsidedCtx.beginPath();
-                sixsidedCtx.moveTo(75, 30);
-                sixsidedCtx.lineTo(105, 50);
-                sixsidedCtx.lineTo(105, 100);
-                sixsidedCtx.lineTo(75, 120);
-                sixsidedCtx.lineTo(45, 100);
-                sixsidedCtx.lineTo(45, 50);
-                sixsidedCtx.closePath();
-                sixsidedCtx.stroke();
-                sixsidedCtx.fillStyle = 'rgba(255, 220, 83, 0.2)';
-                sixsidedCtx.fill();
-            },
-
-            createLantern(type) {
-                const lantern = {
-                    type: type,
-                    x: this.width * 0.2 + Math.random() * 100,
-                    y: this.height * 0.5 + Math.random() * 100,
-                    rotation: 0,
-                    rotationSpeed: 0,
-                    frames: this.silhouetteFrames,
-                    currentFrame: 0,
-                    charms: [],
-                    scale: 1,
-                    ripplePhase: 0
-                };
-
-                if (type === 'carousel') {
-                    // Initialize charm swing phases
-                    for (let i = 0; i < 6; i++) {
-                        lantern.charms.push({
-                            swingPhase: Math.random() * Math.PI * 2,
-                            swingSpeed: 0.5 + Math.random() * 0.5
-                        });
-                    }
-                }
-
-                this.lanterns.push(lantern);
-
-                // Close creation interface
-                document.getElementById('creationInterface').classList.remove('active');
-
-                // Reset interface
-                setTimeout(() => {
-                    document.querySelector('.mode-selection').style.display = 'flex';
-                    document.querySelector('#drawingCanvas').style.display = 'block';
-                    document.querySelector('.canvas-instructions').style.display = 'block';
-                    document.querySelector('.action-buttons').style.display = 'flex';
-                    document.querySelector('.lantern-selection').classList.remove('active');
-                    this.clearDrawing();
-                }, 300);
-            },
-
             handleMouseDown(e) {
                 const rect = this.canvas.getBoundingClientRect();
                 const x = e.clientX - rect.left;
                 const y = e.clientY - rect.top;
 
-                // Check if clicking on add button (ripple dot)
-                if (!this.focusedLantern) {
-                    const addButtonX = this.width * 0.15;
-                    const addButtonY = this.height * 0.7;
-                    const dist = Math.sqrt((x - addButtonX) ** 2 + (y - addButtonY) ** 2);
+                // Check glowing dot (add button)
+                const dotX = this.width * 0.12;
+                const dotY = this.height * 0.75;
+                const dist = Math.sqrt((x - dotX) ** 2 + (y - dotY) ** 2);
 
-                    if (dist < 15) {
-                        document.getElementById('creationInterface').classList.add('active');
-                        return;
-                    }
+                if (dist < 20) {
+                    document.getElementById('drawingInterface').classList.add('active');
+                    return;
                 }
 
-                // Check if clicking on a lantern
+                // Check lanterns
                 for (let lantern of this.lanterns) {
-                    const dist = Math.sqrt((x - lantern.x) ** 2 + (y - lantern.y) ** 2);
-                    if (dist < 60) {
+                    const lDist = Math.sqrt((x - lantern.x) ** 2 + (y - lantern.y) ** 2);
+                    if (lDist < 80) {
+                        this.activeLantern = lantern;
                         this.isDragging = true;
-                        this.dragTarget = lantern;
-                        this.dragOffset = { x: x - lantern.x, y: y - lantern.y };
+                        this.lastMouseX = x;
                         return;
                     }
-                }
-
-                // Click on empty area - zoom out
-                if (this.focusedLantern) {
-                    this.focusedLantern = null;
                 }
             },
 
             handleMouseMove(e) {
-                if (!this.isDragging || !this.dragTarget) return;
+                if (!this.isDragging || !this.activeLantern) return;
 
                 const rect = this.canvas.getBoundingClientRect();
                 const x = e.clientX - rect.left;
-                const y = e.clientY - rect.top;
+                const deltaX = x - this.lastMouseX;
 
-                if (this.dragTarget.type === 'carousel') {
-                    // Rotate carousel based on horizontal movement
-                    const dx = x - this.dragTarget.x;
-                    this.dragTarget.rotationSpeed = dx * 0.01;
+                // Determine if rotating or repositioning
+                if (Math.abs(deltaX) > 2) {
+                    this.isRotating = true;
+                }
+
+                if (this.isRotating) {
+                    // Rotate lantern
+                    this.activeLantern.rotation += deltaX * 0.02;
+                    this.activeLantern.rotationSpeed = deltaX * 0.02;
                 } else {
-                    // Move lantern
-                    this.dragTarget.x = x - this.dragOffset.x;
-                    this.dragTarget.y = y - this.dragOffset.y;
+                    // Reposition lantern
+                    this.activeLantern.x = x;
                 }
+
+                this.lastMouseX = x;
             },
 
-            handleMouseUp(e) {
+            handleMouseUp() {
                 this.isDragging = false;
-                this.dragTarget = null;
+                this.isRotating = false;
+                this.activeLantern = null;
             },
 
-            handleDoubleClick(e) {
-                const rect = this.canvas.getBoundingClientRect();
-                const x = e.clientX - rect.left;
-                const y = e.clientY - rect.top;
+            updateDrawing() {
+                const ctx = this.drawingCtx;
+                ctx.clearRect(0, 0, 300, 300);
 
-                // Check if double-clicking on a lantern's ripple dot
-                for (let lantern of this.lanterns) {
-                    const dist = Math.sqrt((x - lantern.x) ** 2 + (y - (lantern.y + 70)) ** 2);
-                    if (dist < 10) {
-                        this.focusedLantern = lantern;
-                        return;
-                    }
+                if (this.drawingPoints.length < 2) return;
+
+                ctx.fillStyle = 'black';
+                ctx.beginPath();
+                ctx.moveTo(this.drawingPoints[0].x, this.drawingPoints[0].y);
+
+                for (let i = 1; i < this.drawingPoints.length; i++) {
+                    ctx.lineTo(this.drawingPoints[i].x, this.drawingPoints[i].y);
                 }
+
+                ctx.closePath();
+                ctx.fill();
+            },
+
+            finishDrawing() {
+                if (this.drawingPoints.length < 3) return;
+
+                // Capture silhouette
+                const silhouetteCanvas = document.createElement('canvas');
+                silhouetteCanvas.width = 300;
+                silhouetteCanvas.height = 300;
+                const sCtx = silhouetteCanvas.getContext('2d');
+                sCtx.drawImage(this.drawingCanvas, 0, 0);
+
+                // Create lantern
+                const tableY = this.height * 0.65;
+                const randomHeight = -80 + Math.random() * 40;
+
+                this.lanterns.push({
+                    x: this.width * 0.15 + Math.random() * (this.width * 0.2),
+                    y: tableY + randomHeight,
+                    rotation: 0,
+                    rotationSpeed: 0,
+                    silhouette: silhouetteCanvas,
+                    height: 120 + Math.random() * 40
+                });
+
+                // Close drawing interface
+                document.getElementById('drawingInterface').classList.remove('active');
+
+                // Clear drawing
+                this.drawingCtx.clearRect(0, 0, 300, 300);
+                this.drawingPoints = [];
             },
 
             animate() {
                 this.time += 0.016;
 
-                this.ctx.fillStyle = this.colors.background;
-                this.ctx.fillRect(0, 0, this.width, this.height);
+                // Clear
+                this.ctx.clearRect(0, 0, this.width, this.height);
 
-                if (!this.focusedLantern) {
-                    this.renderRoom();
-                    this.renderLanterns();
-                    this.renderShadows();
-                    this.renderAddButton();
-                } else {
-                    this.renderFocusedView();
-                }
+                // Render scene
+                this.renderRoom();
+                this.renderShadows();
+                this.renderLanterns();
+                this.renderGlowingDot();
 
+                // Update physics
                 this.updatePhysics();
 
-                this.animationId = requestAnimationFrame(() => this.animate());
+                requestAnimationFrame(() => this.animate());
             },
 
             renderRoom() {
-                // Wall (right side)
-                const wallGradient = this.ctx.createLinearGradient(this.width * 0.5, 0, this.width, 0);
-                wallGradient.addColorStop(0, this.colors.wall);
-                wallGradient.addColorStop(1, this.colors.wall);
-                this.ctx.fillStyle = wallGradient;
-                this.ctx.fillRect(this.width * 0.5, 0, this.width * 0.5, this.height);
-
-                // Table (left side)
-                const tableGradient = this.ctx.createLinearGradient(0, this.height * 0.6, 0, this.height);
-                tableGradient.addColorStop(0, this.colors.table);
-                tableGradient.addColorStop(1, '#9A907F');
-                this.ctx.fillStyle = tableGradient;
-                this.ctx.fillRect(0, this.height * 0.6, this.width * 0.5, this.height * 0.4);
-            },
-
-            renderLanterns() {
-                for (let lantern of this.lanterns) {
-                    if (lantern.type === 'carousel') {
-                        this.renderCarouselLantern(lantern);
-                    } else {
-                        this.renderSixSidedLantern(lantern);
-                    }
-
-                    // Render ripple dot at base
-                    this.renderRippleDot(lantern.x, lantern.y + 70, lantern.ripplePhase);
-                }
-            },
-
-            renderCarouselLantern(lantern) {
                 const ctx = this.ctx;
+                const splitX = this.width * 0.5;
 
-                // Top ring
-                ctx.fillStyle = this.colors.lanternMetal;
-                ctx.beginPath();
-                ctx.arc(lantern.x, lantern.y, 50, 0, Math.PI * 2);
-                ctx.fill();
+                // Wall (right side) - flat color
+                ctx.fillStyle = this.colors.wall;
+                ctx.fillRect(splitX, 0, this.width - splitX, this.height);
 
-                // Charms hanging from ring
-                for (let i = 0; i < 6; i++) {
-                    const angle = lantern.rotation + (i / 6) * Math.PI * 2;
-                    const charm = lantern.charms[i];
-                    const swing = Math.sin(this.time * charm.swingSpeed + charm.swingPhase) * 0.1;
+                // Table (left side) - subtle vertical gradient
+                const tableTop = this.height * 0.65;
+                const gradient = ctx.createLinearGradient(0, tableTop, 0, this.height);
+                gradient.addColorStop(0, this.colors.table);
+                gradient.addColorStop(1, this.colors.tableDark);
 
-                    const x = lantern.x + Math.cos(angle + swing) * 45;
-                    const y = lantern.y + Math.sin(angle + swing) * 45;
+                ctx.fillStyle = gradient;
+                ctx.fillRect(0, tableTop, splitX, this.height - tableTop);
 
-                    // Wire
-                    ctx.strokeStyle = '#888';
-                    ctx.lineWidth = 1;
-                    ctx.beginPath();
-                    ctx.moveTo(lantern.x + Math.cos(angle) * 45, lantern.y + Math.sin(angle) * 45);
-                    ctx.lineTo(x, y + 40);
-                    ctx.stroke();
-
-                    // Charm (small silhouette)
-                    ctx.save();
-                    ctx.translate(x, y + 40);
-                    ctx.scale(0.08, 0.08);
-                    ctx.translate(-200, -200);
-                    ctx.globalAlpha = 0.7;
-                    ctx.drawImage(lantern.frames[i], 0, 0);
-                    ctx.restore();
-                }
-            },
-
-            renderSixSidedLantern(lantern) {
-                const ctx = this.ctx;
-                const x = lantern.x;
-                const y = lantern.y;
-                const size = 60;
-
-                // Lantern body
-                ctx.fillStyle = this.colors.lanternMetal;
-                ctx.strokeStyle = this.colors.lanternMetal;
-                ctx.lineWidth = 3;
-
-                ctx.beginPath();
-                ctx.moveTo(x, y - size);
-                ctx.lineTo(x + size * 0.5, y - size * 0.5);
-                ctx.lineTo(x + size * 0.5, y + size * 0.5);
-                ctx.lineTo(x, y + size);
-                ctx.lineTo(x - size * 0.5, y + size * 0.5);
-                ctx.lineTo(x - size * 0.5, y - size * 0.5);
-                ctx.closePath();
-                ctx.stroke();
-
-                // Glow from inside
-                ctx.fillStyle = 'rgba(255, 220, 83, 0.3)';
-                ctx.fill();
-
-                // Current frame display
-                const frame = Math.floor(this.time * 2) % 6;
-                ctx.save();
-                ctx.translate(x, y);
-                ctx.scale(0.1, 0.1);
-                ctx.translate(-200, -200);
-                ctx.globalAlpha = 0.4;
-                ctx.drawImage(lantern.frames[frame], 0, 0);
-                ctx.restore();
+                // Floor/background above table
+                ctx.fillStyle = '#A8A199';
+                ctx.fillRect(0, 0, splitX, tableTop);
             },
 
             renderShadows() {
                 const ctx = this.ctx;
-                const wallX = this.width * 0.55;
+                const wallX = this.width * 0.52;
 
-                ctx.save();
-                ctx.globalAlpha = 0.3;
-
+                // Render all shadows with overlap
                 for (let lantern of this.lanterns) {
-                    const lightX = this.width * 0.1;
-                    const lightY = this.height * 0.8;
-
-                    // Calculate shadow position
-                    const dx = wallX - lantern.x;
-                    const dy = 0 - lantern.y;
-                    const angle = Math.atan2(dy, dx);
-
-                    const shadowX = wallX;
-                    const shadowY = this.height * 0.3 + (lantern.y - this.height * 0.5) * 0.8;
-                    const shadowScale = 2.5;
-
-                    if (lantern.type === 'carousel') {
-                        // Render rotating shadow
-                        const frame = Math.floor((lantern.rotation / (Math.PI * 2)) * 6) % 6;
-                        ctx.save();
-                        ctx.filter = 'blur(20px)';
-                        ctx.translate(shadowX, shadowY);
-                        ctx.scale(shadowScale * 0.3, shadowScale * 0.3);
-                        ctx.translate(-200, -200);
-                        ctx.drawImage(lantern.frames[frame], 0, 0);
-                        ctx.restore();
-                    } else {
-                        // Render animated shadow
-                        const frame = Math.floor(this.time * 2) % 6;
-                        ctx.save();
-                        ctx.filter = 'blur(25px)';
-                        ctx.translate(shadowX, shadowY);
-                        ctx.scale(shadowScale * 0.3, shadowScale * 0.3);
-                        ctx.translate(-200, -200);
-                        ctx.drawImage(lantern.frames[frame], 0, 0);
-                        ctx.restore();
-                    }
+                    this.renderSingleShadow(lantern, wallX);
                 }
+            },
+
+            renderSingleShadow(lantern, wallX) {
+                const ctx = this.ctx;
+
+                // Shadow position calculation
+                // Lantern moves left → shadow moves right (opposite)
+                const lanternRelX = lantern.x / (this.width * 0.5);
+                const shadowOffsetX = (0.5 - lanternRelX) * 200;
+                const shadowX = wallX + 200 + shadowOffsetX;
+                const shadowY = this.height * 0.4;
+
+                // Shadow scale (1.8x to 2.2x)
+                const shadowScale = 2.0;
+
+                // Render shadow with heavy blur
+                ctx.save();
+                ctx.globalAlpha = 0.25;
+                ctx.filter = 'blur(80px)';
+
+                ctx.translate(shadowX, shadowY);
+                ctx.rotate(lantern.rotation);
+                ctx.scale(shadowScale * 0.3, shadowScale * 0.3);
+                ctx.translate(-150, -150);
+
+                ctx.drawImage(lantern.silhouette, 0, 0);
 
                 ctx.restore();
             },
 
-            renderAddButton() {
-                const x = this.width * 0.15;
-                const y = this.height * 0.7;
-                this.renderRippleDot(x, y, this.time);
+            renderLanterns() {
+                for (let lantern of this.lanterns) {
+                    this.renderDiptyqueLantern(lantern);
+                }
             },
 
-            renderRippleDot(x, y, phase) {
+            renderDiptyqueLantern(lantern) {
                 const ctx = this.ctx;
+                const x = lantern.x;
+                const y = lantern.y;
 
-                // Ripples
+                // Drop shadow beneath base
+                ctx.save();
+                ctx.fillStyle = 'rgba(0, 0, 0, 0.25)';
+                ctx.filter = 'blur(15px)';
+                ctx.beginPath();
+                ctx.ellipse(x, y + lantern.height + 10, 25, 8, 0, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.restore();
+
+                // Base circle
+                ctx.fillStyle = this.colors.lanternGold;
+                ctx.beginPath();
+                ctx.arc(x, y + lantern.height, 15, 0, Math.PI * 2);
+                ctx.fill();
+
+                // Vertical stand
+                ctx.strokeStyle = this.colors.lanternGold;
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                ctx.moveTo(x, y + lantern.height);
+                ctx.lineTo(x, y);
+                ctx.stroke();
+
+                // Top circular plate
+                ctx.strokeStyle = this.colors.lanternGold;
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                ctx.arc(x, y, 50, 0, Math.PI * 2);
+                ctx.stroke();
+
+                // Inner circle detail
+                ctx.beginPath();
+                ctx.arc(x, y, 45, 0, Math.PI * 2);
+                ctx.stroke();
+
+                // 6 hanging wires with silhouette charms
+                for (let i = 0; i < 6; i++) {
+                    const angle = lantern.rotation + (i / 6) * Math.PI * 2;
+                    const wireX = x + Math.cos(angle) * 42;
+                    const wireY = y + Math.sin(angle) * 42;
+                    const charmY = wireY + 60;
+
+                    // Wire
+                    ctx.strokeStyle = this.colors.lanternGold;
+                    ctx.lineWidth = 1;
+                    ctx.beginPath();
+                    ctx.moveTo(wireX, wireY);
+                    ctx.lineTo(wireX, charmY);
+                    ctx.stroke();
+
+                    // Charm (flat black silhouette)
+                    ctx.save();
+                    ctx.translate(wireX, charmY);
+                    ctx.scale(0.08, 0.08);
+                    ctx.translate(-150, -150);
+                    ctx.drawImage(lantern.silhouette, 0, 0);
+                    ctx.restore();
+                }
+            },
+
+            renderGlowingDot() {
+                const ctx = this.ctx;
+                const x = this.width * 0.12;
+                const y = this.height * 0.75;
+
+                // Pulsating halo
+                const pulse = Math.sin(this.time * 2) * 0.5 + 0.5;
+
+                // Outer ripples
                 for (let i = 0; i < 3; i++) {
-                    const ripplePhase = (phase * 2 + i * 0.5) % 2;
-                    const radius = 5 + ripplePhase * 20;
-                    const alpha = Math.max(0, 1 - ripplePhase);
+                    const phase = (this.time * 1.5 + i * 0.4) % 1;
+                    const radius = 10 + phase * 30;
+                    const alpha = (1 - phase) * 0.4;
 
-                    ctx.strokeStyle = `rgba(255, 220, 83, ${alpha * 0.5})`;
+                    ctx.strokeStyle = `rgba(255, 255, 255, ${alpha})`;
                     ctx.lineWidth = 2;
                     ctx.beginPath();
                     ctx.arc(x, y, radius, 0, Math.PI * 2);
@@ -756,90 +437,21 @@
                 }
 
                 // Center dot
-                const pulse = Math.sin(phase * 3) * 0.3 + 0.7;
-                ctx.fillStyle = `rgba(255, 220, 83, ${pulse})`;
+                ctx.fillStyle = `rgba(255, 255, 255, ${0.8 + pulse * 0.2})`;
                 ctx.beginPath();
                 ctx.arc(x, y, 8, 0, Math.PI * 2);
                 ctx.fill();
             },
 
-            renderFocusedView() {
-                const lantern = this.focusedLantern;
-
-                // Darker background
-                this.ctx.fillStyle = 'rgba(26, 26, 26, 0.8)';
-                this.ctx.fillRect(0, 0, this.width, this.height);
-
-                // Centered lantern
-                const centerX = this.width * 0.3;
-                const centerY = this.height * 0.5;
-
-                lantern.scale = 2;
-
-                this.ctx.save();
-                this.ctx.translate(centerX, centerY);
-                this.ctx.scale(lantern.scale, lantern.scale);
-                this.ctx.translate(-lantern.x, -lantern.y);
-
-                if (lantern.type === 'carousel') {
-                    this.renderCarouselLantern(lantern);
-                } else {
-                    this.renderSixSidedLantern(lantern);
-                }
-
-                this.ctx.restore();
-
-                // Large shadow on right
-                const shadowX = this.width * 0.7;
-                const shadowY = this.height * 0.5;
-
-                this.ctx.save();
-                this.ctx.globalAlpha = 0.5;
-                this.ctx.filter = 'blur(30px)';
-
-                if (lantern.type === 'carousel') {
-                    const frame = Math.floor((lantern.rotation / (Math.PI * 2)) * 6) % 6;
-                    this.ctx.translate(shadowX, shadowY);
-                    this.ctx.scale(0.8, 0.8);
-                    this.ctx.translate(-200, -200);
-                    this.ctx.drawImage(lantern.frames[frame], 0, 0);
-                } else {
-                    const frame = Math.floor(this.time * 2) % 6;
-                    this.ctx.translate(shadowX, shadowY);
-                    this.ctx.scale(0.8, 0.8);
-                    this.ctx.translate(-200, -200);
-                    this.ctx.drawImage(lantern.frames[frame], 0, 0);
-                }
-
-                this.ctx.restore();
-
-                // Instructions
-                this.ctx.fillStyle = 'rgba(255, 252, 241, 0.7)';
-                this.ctx.font = '14px sans-serif';
-                this.ctx.textAlign = 'center';
-                this.ctx.fillText('Click anywhere to return', this.width / 2, this.height - 40);
-            },
-
             updatePhysics() {
                 for (let lantern of this.lanterns) {
-                    // Update rotation
+                    // Apply rotation speed and ease to stop
                     lantern.rotation += lantern.rotationSpeed;
-                    lantern.rotationSpeed *= 0.95; // Friction
-
-                    // Update ripple phase
-                    lantern.ripplePhase += 0.016;
-
-                    // Update charm swings
-                    if (lantern.charms) {
-                        for (let charm of lantern.charms) {
-                            charm.swingPhase += 0.016 * charm.swingSpeed;
-                        }
-                    }
+                    lantern.rotationSpeed *= 0.94;
                 }
             }
         };
 
-        // Initialize when page loads
         window.addEventListener('DOMContentLoaded', () => {
             app.init();
         });
