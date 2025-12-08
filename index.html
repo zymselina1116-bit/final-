@@ -180,12 +180,6 @@
                 lanternGold: '#FFDC53'
             },
 
-            lanternColors: {
-                'warm-white': { glow: '#FFFAED', name: 'Warm White' },
-                'soft-amber': { glow: '#FFD580', name: 'Soft Amber' },
-                'pale-pink': { glow: '#FFB3D9', name: 'Pale Pink' },
-                'pale-blue': { glow: '#B3D9FF', name: 'Pale Blue' }
-            },
 
             getTablePolygon() {
                 const w = this.width;
@@ -261,7 +255,7 @@
                 const dist = Math.sqrt((x - dotX) ** 2 + (y - dotY) ** 2);
 
                 if (dist < 20 && !this.focusedLantern) {
-                    this.showChoiceMenu(dotX, dotY - 100);
+                    document.getElementById('drawingInterface').classList.add('active');
                     return;
                 }
 
@@ -330,54 +324,6 @@
                 }
             },
 
-            showChoiceMenu(x, y) {
-                const menu = document.getElementById('choiceMenu');
-                const content = document.getElementById('choiceContent');
-
-                content.innerHTML = `
-                    <div class="choice-title">Choose Lantern Type</div>
-                    <button class="choice-button" onclick="app.chooseLanternType('carousel')">Diptyque Carousel</button>
-                    <button class="choice-button" onclick="app.chooseLanternType('hexagonal')">Hexagonal Lantern</button>
-                `;
-
-                menu.style.left = x + 'px';
-                menu.style.top = y + 'px';
-                menu.classList.add('active');
-            },
-
-            chooseLanternType(type) {
-                this.pendingLanternType = type;
-
-                if (type === 'hexagonal') {
-                    this.showColorChoice();
-                } else {
-                    this.createLanternWithDrawing('warm-white');
-                }
-            },
-
-            showColorChoice() {
-                const content = document.getElementById('choiceContent');
-                content.innerHTML = `
-                    <div class="choice-title">Choose Light Color</div>
-                    <div class="color-grid">
-                        <button class="color-choice" onclick="app.selectColor('warm-white')">Warm White</button>
-                        <button class="color-choice" onclick="app.selectColor('soft-amber')">Soft Amber</button>
-                        <button class="color-choice" onclick="app.selectColor('pale-pink')">Pale Pink</button>
-                        <button class="color-choice" onclick="app.selectColor('pale-blue')">Pale Blue</button>
-                    </div>
-                `;
-            },
-
-            selectColor(color) {
-                document.getElementById('choiceMenu').classList.remove('active');
-                this.createLanternWithDrawing(color);
-            },
-
-            createLanternWithDrawing(color) {
-                document.getElementById('choiceMenu').classList.remove('active');
-                document.getElementById('drawingInterface').classList.add('active');
-                this.pendingColor = color;
-            },
 
             updateDrawing() {
                 const ctx = this.drawingCtx;
@@ -410,25 +356,20 @@
                 const dotX = polygon[3].x + (polygon[2].x - polygon[3].x) * 0.15;
                 const dotY = polygon[3].y - 40;
 
-                const colorData = this.lanternColors[this.pendingColor || 'warm-white'];
-
                 this.lanterns.push({
-                    type: this.pendingLanternType,
+                    type: 'carousel',
                     x: dotX,
                     y: dotY - 80,
                     rotation: 0,
                     rotationSpeed: 0,
                     silhouette: silhouetteCanvas,
                     height: 100,
-                    color: this.pendingColor || 'warm-white',
-                    glowColor: colorData.glow
+                    glowColor: '#FFFAED'
                 });
 
                 document.getElementById('drawingInterface').classList.remove('active');
                 this.drawingCtx.clearRect(0, 0, 300, 300);
                 this.drawingPoints = [];
-                this.pendingLanternType = null;
-                this.pendingColor = null;
             },
 
             animate() {
@@ -490,11 +431,7 @@
                 const wallX = this.width * 0.5;
 
                 for (let lantern of this.lanterns) {
-                    if (lantern.type === 'carousel') {
-                        this.renderCarouselShadows(lantern, wallX);
-                    } else {
-                        this.renderHexagonalShadows(lantern, wallX);
-                    }
+                    this.renderCarouselShadows(lantern, wallX);
                 }
             },
 
@@ -533,59 +470,11 @@
                 }
             },
 
-            renderHexagonalShadows(lantern, wallX) {
-                const ctx = this.ctx;
-                const candleX = lantern.x;
-                const candleY = lantern.y + lantern.height;
-
-                // Render 6 individual face shadows
-                const size = 40;
-                const faceAngles = [
-                    { angle: 0, x: size * 0.5, y: 0 },
-                    { angle: Math.PI / 3, x: size * 0.5, y: size * 0.5 },
-                    { angle: 2 * Math.PI / 3, x: 0, y: size * 0.5 },
-                    { angle: Math.PI, x: -size * 0.5, y: size * 0.5 },
-                    { angle: 4 * Math.PI / 3, x: -size * 0.5, y: 0 },
-                    { angle: 5 * Math.PI / 3, x: 0, y: -size * 0.5 }
-                ];
-
-                for (let i = 0; i < 6; i++) {
-                    const face = faceAngles[i];
-                    const faceX = lantern.x + face.x;
-                    const faceY = lantern.y + face.y;
-
-                    const dx = faceX - candleX;
-                    const dy = faceY - candleY;
-                    const dist = Math.sqrt(dx * dx + dy * dy);
-
-                    const shadowDist = 300;
-                    const shadowX = wallX + (dx / dist) * shadowDist;
-                    const shadowY = this.height * 0.4 + (dy / dist) * shadowDist * 0.4;
-
-                    ctx.save();
-                    ctx.globalAlpha = 0.40;
-                    ctx.filter = 'blur(12px)';
-
-                    ctx.translate(shadowX, shadowY);
-                    ctx.rotate(lantern.rotation + face.angle);
-                    ctx.scale(0.25, 0.25);
-                    ctx.translate(-150, -150);
-
-                    ctx.drawImage(lantern.silhouette, 0, 0);
-
-                    ctx.restore();
-                }
-            },
 
             renderLanterns() {
                 for (let lantern of this.lanterns) {
                     this.renderCandle(lantern.x, lantern.y + lantern.height, lantern.glowColor);
-
-                    if (lantern.type === 'carousel') {
-                        this.renderCarouselLantern(lantern);
-                    } else {
-                        this.renderHexagonalLantern(lantern);
-                    }
+                    this.renderCarouselLantern(lantern);
                 }
             },
 
@@ -688,86 +577,6 @@
                 }
             },
 
-            renderHexagonalLantern(lantern) {
-                const ctx = this.ctx;
-                const x = lantern.x;
-                const y = lantern.y;
-                const size = 40;
-
-                // Hexagonal frame with micro-3D
-                const hexPoints = [
-                    { x: x, y: y - size },
-                    { x: x + size * 0.5, y: y - size * 0.5 },
-                    { x: x + size * 0.5, y: y + size * 0.5 },
-                    { x: x, y: y + size },
-                    { x: x - size * 0.5, y: y + size * 0.5 },
-                    { x: x - size * 0.5, y: y - size * 0.5 }
-                ];
-
-                // Back faces (darker)
-                for (let i = 1; i <= 3; i++) {
-                    ctx.fillStyle = 'rgba(120, 100, 70, 0.5)';
-                    ctx.beginPath();
-                    ctx.moveTo(x, y);
-                    ctx.lineTo(hexPoints[i].x, hexPoints[i].y);
-                    ctx.lineTo(hexPoints[(i + 1) % 6].x, hexPoints[(i + 1) % 6].y);
-                    ctx.closePath();
-                    ctx.fill();
-                }
-
-                // Front faces (with glow)
-                for (let i = 4; i <= 6; i++) {
-                    const idx = i % 6;
-                    ctx.save();
-                    ctx.fillStyle = lantern.glowColor;
-                    ctx.globalAlpha = 0.35;
-                    ctx.beginPath();
-                    ctx.moveTo(x, y);
-                    ctx.lineTo(hexPoints[idx].x, hexPoints[idx].y);
-                    ctx.lineTo(hexPoints[(idx + 1) % 6].x, hexPoints[(idx + 1) % 6].y);
-                    ctx.closePath();
-                    ctx.fill();
-                    ctx.restore();
-                }
-
-                // Gold frame outline
-                ctx.strokeStyle = this.colors.lanternGold;
-                ctx.lineWidth = 2.5;
-                ctx.beginPath();
-                ctx.moveTo(hexPoints[0].x, hexPoints[0].y);
-                for (let i = 1; i < 6; i++) {
-                    ctx.lineTo(hexPoints[i].x, hexPoints[i].y);
-                }
-                ctx.closePath();
-                ctx.stroke();
-
-                // Inner bevels
-                ctx.strokeStyle = 'rgba(200, 160, 30, 0.7)';
-                ctx.lineWidth = 1;
-                ctx.beginPath();
-                ctx.moveTo(x, y - size * 0.8);
-                for (let i = 1; i < 6; i++) {
-                    const angle = (i / 6) * Math.PI * 2 - Math.PI / 2;
-                    ctx.lineTo(x + Math.cos(angle) * size * 0.8, y + Math.sin(angle) * size * 0.8);
-                }
-                ctx.closePath();
-                ctx.stroke();
-
-                // Silhouettes on each face
-                for (let i = 0; i < 6; i++) {
-                    const angle = (i / 6) * Math.PI * 2 - Math.PI / 2 + lantern.rotation;
-                    const faceX = x + Math.cos(angle) * size * 0.5;
-                    const faceY = y + Math.sin(angle) * size * 0.5;
-
-                    ctx.save();
-                    ctx.translate(faceX, faceY);
-                    ctx.scale(0.05, 0.05);
-                    ctx.translate(-150, -150);
-                    ctx.globalAlpha = 0.6;
-                    ctx.drawImage(lantern.silhouette, 0, 0);
-                    ctx.restore();
-                }
-            },
 
             renderCandle(x, y, glowColor) {
                 const ctx = this.ctx;
@@ -853,20 +662,11 @@
 
                 // Shadow
                 const wallX = this.width * 0.65;
-                if (lantern.type === 'carousel') {
-                    this.renderCarouselShadows(lantern, wallX);
-                } else {
-                    this.renderHexagonalShadows(lantern, wallX);
-                }
+                this.renderCarouselShadows(lantern, wallX);
 
                 // Lantern
                 this.renderCandle(lantern.x, lantern.y + lantern.height, lantern.glowColor);
-
-                if (lantern.type === 'carousel') {
-                    this.renderCarouselLantern(lantern);
-                } else {
-                    this.renderHexagonalLantern(lantern);
-                }
+                this.renderCarouselLantern(lantern);
 
                 this.ctx.restore();
 
