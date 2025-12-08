@@ -317,9 +317,15 @@
                 ceiling.rotation.x = Math.PI / 2;
                 this.scene.add(ceiling);
 
-                // Ambient light (very dim)
-                const ambientLight = new THREE.AmbientLight(0x404040, 0.15);
+                // Ambient light (slightly brighter so room is visible)
+                const ambientLight = new THREE.AmbientLight(0x808080, 0.4);
                 this.scene.add(ambientLight);
+
+                // Add a default spotlight so room is visible on load
+                const defaultSpotlight = this.createSpotlight();
+                defaultSpotlight.position.set(0, 0, 5);
+                this.scene.add(defaultSpotlight);
+                this.spotlights.push(defaultSpotlight);
             },
 
             addCarousel() {
