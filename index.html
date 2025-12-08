@@ -14,6 +14,7 @@
         body {
             overflow: hidden;
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: #000;
         }
 
         canvas {
@@ -64,10 +65,79 @@
         .draw-button:hover {
             background: #FFE680;
         }
+
+        /* Choice Menu */
+        #choiceMenu {
+            position: absolute;
+            display: none;
+            flex-direction: column;
+            gap: 15px;
+            padding: 20px;
+            background: rgba(0, 0, 0, 0.9);
+            border: 2px solid #FFDC53;
+            border-radius: 8px;
+            z-index: 50;
+        }
+
+        #choiceMenu.active {
+            display: flex;
+        }
+
+        .choice-title {
+            color: #FFFCF1;
+            font-size: 14px;
+            text-align: center;
+            letter-spacing: 1px;
+            margin-bottom: 5px;
+        }
+
+        .choice-button {
+            padding: 12px 25px;
+            background: transparent;
+            border: 2px solid #FFDC53;
+            color: #FFFCF1;
+            cursor: pointer;
+            font-size: 14px;
+            letter-spacing: 1px;
+            transition: all 0.2s;
+        }
+
+        .choice-button:hover {
+            background: #FFDC53;
+            color: #000;
+        }
+
+        .color-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            margin-top: 10px;
+        }
+
+        .color-choice {
+            padding: 10px 15px;
+            background: transparent;
+            border: 2px solid #FFDC53;
+            color: #FFFCF1;
+            cursor: pointer;
+            font-size: 12px;
+            text-align: center;
+            transition: all 0.2s;
+        }
+
+        .color-choice:hover {
+            background: #FFDC53;
+            color: #000;
+        }
     </style>
 </head>
 <body>
     <canvas id="mainCanvas"></canvas>
+
+    <!-- Choice Menu -->
+    <div id="choiceMenu">
+        <div id="choiceContent"></div>
+    </div>
 
     <div id="drawingInterface">
         <canvas id="drawingCanvas" width="300" height="300"></canvas>
@@ -91,11 +161,11 @@
             // Lanterns
             lanterns: [],
             activeLantern: null,
+            pendingLanternType: null,
 
             // Interaction
             isDragging: false,
-            isRotating: false,
-            dragMode: null, // 'rotate' or 'move'
+            dragMode: null,
             lastMouseX: 0,
             lastMouseY: 0,
 
@@ -110,16 +180,21 @@
                 lanternGold: '#FFDC53'
             },
 
-            // Perspective tabletop polygon
+            lanternColors: {
+                'warm-white': { glow: '#FFFAED', shadow: '#000000' },
+                'soft-yellow': { glow: '#FFE680', shadow: '#000000' },
+                'soft-pink': { glow: '#FFB3D9', shadow: '#2B0015' },
+                'soft-blue': { glow: '#B3D9FF', shadow: '#001529' }
+            },
+
             getTablePolygon() {
-                // Trapezoid with perspective: wider at front (bottom), narrower at back
                 const w = this.width;
                 const h = this.height;
                 return [
-                    { x: w * 0.05, y: h * 0.62 },  // Top-left (back-left)
-                    { x: w * 0.35, y: h * 0.62 },  // Top-right (back-right)
-                    { x: w * 0.45, y: h * 0.95 },  // Bottom-right (front-right)
-                    { x: 0, y: h * 0.95 }           // Bottom-left (front-left)
+                    { x: w * 0.05, y: h * 0.62 },
+                    { x: w * 0.35, y: h * 0.62 },
+                    { x: w * 0.45, y: h * 0.95 },
+                    { x: 0, y: h * 0.95 }
                 ];
             },
 
@@ -145,12 +220,10 @@
             },
 
             setupEventListeners() {
-                // Main canvas
                 this.canvas.addEventListener('mousedown', (e) => this.handleMouseDown(e));
                 this.canvas.addEventListener('mousemove', (e) => this.handleMouseMove(e));
                 this.canvas.addEventListener('mouseup', () => this.handleMouseUp());
 
-                // Drawing canvas
                 this.drawingCanvas.addEventListener('mousedown', (e) => {
                     this.isDrawing = true;
                     const rect = this.drawingCanvas.getBoundingClientRect();
@@ -180,42 +253,24 @@
                 const x = e.clientX - rect.left;
                 const y = e.clientY - rect.top;
 
-                // Check glowing dot (add button) - position on table
+                // Check glowing dot
                 const polygon = this.getTablePolygon();
                 const dotX = polygon[3].x + (polygon[2].x - polygon[3].x) * 0.15;
                 const dotY = polygon[3].y - 40;
                 const dist = Math.sqrt((x - dotX) ** 2 + (y - dotY) ** 2);
 
                 if (dist < 20) {
-                    document.getElementById('drawingInterface').classList.add('active');
+                    this.showChoiceMenu(dotX, dotY - 100);
                     return;
                 }
 
-                // Check lanterns - determine if clicking base (move) or top (rotate)
+                // Check lanterns
                 for (let lantern of this.lanterns) {
-                    const baseY = lantern.y + lantern.height;
-                    const topY = lantern.y;
-
-                    // Check if clicking on base area (bottom third)
-                    const baseDistY = Math.abs(y - baseY);
-                    const baseDistX = Math.abs(x - lantern.x);
-
-                    if (baseDistX < 40 && baseDistY < 40 && y > topY + lantern.height * 0.6) {
-                        // Clicking base - enable repositioning
+                    const lDist = Math.sqrt((x - lantern.x) ** 2 + (y - lantern.y) ** 2);
+                    if (lDist < 80) {
                         this.activeLantern = lantern;
                         this.isDragging = true;
-                        this.dragMode = 'move';
-                        this.lastMouseX = x;
-                        this.lastMouseY = y;
-                        return;
-                    }
-
-                    // Check if clicking on top carousel area (for rotation)
-                    const topDist = Math.sqrt((x - lantern.x) ** 2 + (y - lantern.y) ** 2);
-                    if (topDist < 80) {
-                        this.activeLantern = lantern;
-                        this.isDragging = true;
-                        this.dragMode = 'rotate';
+                        this.dragMode = lantern.type === 'carousel' ? 'rotate' : 'move';
                         this.lastMouseX = x;
                         this.lastMouseY = y;
                         return;
@@ -230,14 +285,15 @@
                 const x = e.clientX - rect.left;
                 const y = e.clientY - rect.top;
                 const deltaX = x - this.lastMouseX;
+                const deltaY = y - this.lastMouseY;
 
-                if (this.dragMode === 'rotate') {
-                    // Rotate lantern (position stays fixed)
+                if (this.dragMode === 'rotate' && this.activeLantern.type === 'carousel') {
                     this.activeLantern.rotation += deltaX * 0.02;
                     this.activeLantern.rotationSpeed = deltaX * 0.02;
-                } else if (this.dragMode === 'move') {
-                    // Reposition lantern (only horizontal movement)
-                    this.activeLantern.x = x;
+                } else {
+                    // Free movement
+                    this.activeLantern.x += deltaX;
+                    this.activeLantern.y += deltaY;
                 }
 
                 this.lastMouseX = x;
@@ -246,9 +302,57 @@
 
             handleMouseUp() {
                 this.isDragging = false;
-                this.isRotating = false;
                 this.dragMode = null;
                 this.activeLantern = null;
+            },
+
+            showChoiceMenu(x, y) {
+                const menu = document.getElementById('choiceMenu');
+                const content = document.getElementById('choiceContent');
+
+                content.innerHTML = `
+                    <div class="choice-title">Choose Lantern Type</div>
+                    <button class="choice-button" onclick="app.chooseLanternType('carousel')">Carousel Lantern</button>
+                    <button class="choice-button" onclick="app.chooseLanternType('hexagonal')">Hexagonal Lantern</button>
+                `;
+
+                menu.style.left = x + 'px';
+                menu.style.top = y + 'px';
+                menu.classList.add('active');
+            },
+
+            chooseLanternType(type) {
+                this.pendingLanternType = type;
+
+                if (type === 'hexagonal') {
+                    this.showColorChoice();
+                } else {
+                    this.createLanternWithDrawing('warm-white');
+                }
+            },
+
+            showColorChoice() {
+                const content = document.getElementById('choiceContent');
+                content.innerHTML = `
+                    <div class="choice-title">Choose Light Color</div>
+                    <div class="color-grid">
+                        <button class="color-choice" onclick="app.selectColor('warm-white')">Warm White</button>
+                        <button class="color-choice" onclick="app.selectColor('soft-yellow')">Soft Yellow</button>
+                        <button class="color-choice" onclick="app.selectColor('soft-pink')">Soft Pink</button>
+                        <button class="color-choice" onclick="app.selectColor('soft-blue')">Soft Blue</button>
+                    </div>
+                `;
+            },
+
+            selectColor(color) {
+                document.getElementById('choiceMenu').classList.remove('active');
+                this.createLanternWithDrawing(color);
+            },
+
+            createLanternWithDrawing(color) {
+                document.getElementById('choiceMenu').classList.remove('active');
+                document.getElementById('drawingInterface').classList.add('active');
+                this.pendingColor = color;
             },
 
             updateDrawing() {
@@ -272,57 +376,49 @@
             finishDrawing() {
                 if (this.drawingPoints.length < 3) return;
 
-                // Capture silhouette
                 const silhouetteCanvas = document.createElement('canvas');
                 silhouetteCanvas.width = 300;
                 silhouetteCanvas.height = 300;
                 const sCtx = silhouetteCanvas.getContext('2d');
                 sCtx.drawImage(this.drawingCanvas, 0, 0);
 
-                // Create lantern on perspective table
                 const polygon = this.getTablePolygon();
+                const dotX = polygon[3].x + (polygon[2].x - polygon[3].x) * 0.15;
+                const dotY = polygon[3].y - 40;
 
-                // Random position within table polygon (20-80% from left edge)
-                const t = 0.2 + Math.random() * 0.6;
-                const topEdgeX = polygon[0].x + (polygon[1].x - polygon[0].x) * t;
-                const bottomEdgeX = polygon[3].x + (polygon[2].x - polygon[3].x) * t;
-
-                // Random depth on table (30-70% from back to front)
-                const depth = 0.3 + Math.random() * 0.4;
-                const lanternX = topEdgeX + (bottomEdgeX - topEdgeX) * depth;
-                const lanternY = polygon[0].y + (polygon[3].y - polygon[0].y) * depth;
+                const colorData = this.lanternColors[this.pendingColor || 'warm-white'];
 
                 this.lanterns.push({
-                    x: lanternX,
-                    y: lanternY - 60, // Offset up so base sits on table
+                    type: this.pendingLanternType,
+                    x: dotX,
+                    y: dotY - 80,
                     rotation: 0,
                     rotationSpeed: 0,
                     silhouette: silhouetteCanvas,
-                    height: 100 + Math.random() * 50
+                    height: 100,
+                    color: this.pendingColor || 'warm-white',
+                    glowColor: colorData.glow,
+                    shadowColor: colorData.shadow
                 });
 
-                // Close drawing interface
                 document.getElementById('drawingInterface').classList.remove('active');
-
-                // Clear drawing
                 this.drawingCtx.clearRect(0, 0, 300, 300);
                 this.drawingPoints = [];
+                this.pendingLanternType = null;
+                this.pendingColor = null;
             },
 
             animate() {
                 this.time += 0.016;
 
-                // Clear
                 this.ctx.clearRect(0, 0, this.width, this.height);
 
-                // Render scene
                 this.renderRoom();
                 this.renderShadows();
                 this.renderLanterns();
                 this.renderGlowingDot();
-                this.renderGlobalLighting();
+                this.renderDarkOverlay();
 
-                // Update physics
                 this.updatePhysics();
 
                 requestAnimationFrame(() => this.animate());
@@ -331,14 +427,11 @@
             renderRoom() {
                 const ctx = this.ctx;
 
-                // Wall (entire background) - flat beige color
                 ctx.fillStyle = this.colors.wall;
                 ctx.fillRect(0, 0, this.width, this.height);
 
-                // Perspective tabletop polygon
                 const polygon = this.getTablePolygon();
 
-                // Main table with gradient (darker at front/bottom, lighter at back)
                 ctx.save();
                 ctx.beginPath();
                 ctx.moveTo(polygon[0].x, polygon[0].y);
@@ -347,19 +440,14 @@
                 }
                 ctx.closePath();
 
-                // Vertical gradient for depth
-                const tableGradient = ctx.createLinearGradient(
-                    0, polygon[0].y,
-                    0, polygon[3].y
-                );
-                tableGradient.addColorStop(0, '#C8BFB0'); // Lighter at back
+                const tableGradient = ctx.createLinearGradient(0, polygon[0].y, 0, polygon[3].y);
+                tableGradient.addColorStop(0, '#C8BFB0');
                 tableGradient.addColorStop(0.4, this.colors.table);
-                tableGradient.addColorStop(1, '#7A7060'); // Darker at front
+                tableGradient.addColorStop(1, '#7A7060');
 
                 ctx.fillStyle = tableGradient;
                 ctx.fill();
 
-                // Edge highlight along the top edge
                 ctx.strokeStyle = 'rgba(255, 252, 241, 0.3)';
                 ctx.lineWidth = 2;
                 ctx.beginPath();
@@ -367,91 +455,75 @@
                 ctx.lineTo(polygon[1].x, polygon[1].y);
                 ctx.stroke();
 
-                // Soft shadow along left edge for depth
-                const leftEdgeGradient = ctx.createLinearGradient(
-                    polygon[0].x, 0,
-                    polygon[0].x + 60, 0
-                );
-                leftEdgeGradient.addColorStop(0, 'rgba(0, 0, 0, 0.2)');
-                leftEdgeGradient.addColorStop(1, 'rgba(0, 0, 0, 0)');
-
-                ctx.beginPath();
-                ctx.moveTo(polygon[0].x, polygon[0].y);
-                ctx.lineTo(polygon[3].x, polygon[3].y);
-                ctx.lineTo(polygon[3].x + 60, polygon[3].y);
-                ctx.lineTo(polygon[0].x + 60, polygon[0].y);
-                ctx.closePath();
-                ctx.fillStyle = leftEdgeGradient;
-                ctx.fill();
-
                 ctx.restore();
             },
 
             renderShadows() {
                 const ctx = this.ctx;
-                // Wall starts where table ends (right side)
                 const wallX = this.width * 0.5;
 
-                // Render all shadows with overlap
                 for (let lantern of this.lanterns) {
-                    this.renderSingleShadow(lantern, wallX);
+                    if (lantern.type === 'carousel') {
+                        this.renderCarouselShadows(lantern, wallX);
+                    } else {
+                        this.renderHexagonalShadow(lantern, wallX);
+                    }
                 }
             },
 
-            renderSingleShadow(lantern, wallX) {
+            renderCarouselShadows(lantern, wallX) {
                 const ctx = this.ctx;
 
-                // Shadow position calculation
-                // Lantern moves left → shadow moves right (opposite)
-                const lanternRelX = lantern.x / (this.width * 0.5);
-                const shadowOffsetX = (0.5 - lanternRelX) * 200;
-                const shadowX = wallX + 200 + shadowOffsetX;
+                // Render individual charm shadows
+                for (let i = 0; i < 6; i++) {
+                    const angle = lantern.rotation + (i / 6) * Math.PI * 2;
+                    const charmX = lantern.x + Math.cos(angle) * 38;
+                    const charmY = lantern.y + Math.sin(angle) * 38 + 60;
+
+                    // Calculate shadow position
+                    const lightX = lantern.x;
+                    const lightY = lantern.y + lantern.height;
+
+                    const dx = charmX - lightX;
+                    const dy = charmY - lightY;
+                    const dist = Math.sqrt(dx * dx + dy * dy);
+
+                    const shadowDist = 250;
+                    const shadowX = wallX + (dx / dist) * shadowDist;
+                    const shadowY = this.height * 0.4 + (dy / dist) * shadowDist * 0.3;
+
+                    // Crisp shadow with slight blur
+                    ctx.save();
+                    ctx.globalAlpha = 0.4;
+                    ctx.filter = 'blur(8px)';
+
+                    ctx.translate(shadowX, shadowY);
+                    ctx.rotate(lantern.rotation + (i / 6) * Math.PI * 2);
+                    ctx.scale(0.15, 0.15);
+                    ctx.translate(-150, -150);
+
+                    ctx.drawImage(lantern.silhouette, 0, 0);
+
+                    ctx.restore();
+                }
+            },
+
+            renderHexagonalShadow(lantern, wallX) {
+                const ctx = this.ctx;
+
+                const lightX = lantern.x;
+                const lightY = lantern.y + lantern.height;
+
+                const dx = wallX - lightX;
+                const shadowX = wallX + 150;
                 const shadowY = this.height * 0.4;
 
-                // Shadow scale (1.8x to 2.2x)
-                const shadowScale = 2.0;
-
-                // Use multiply blend mode for darker overlapping shadows
                 ctx.save();
-                ctx.globalCompositeOperation = 'multiply';
-
-                // Layer 1: Sharp center (very dark)
-                ctx.globalAlpha = 0.85;
-                ctx.filter = 'blur(50px)';
+                ctx.globalAlpha = 0.45;
+                ctx.filter = 'blur(10px)';
 
                 ctx.translate(shadowX, shadowY);
-                ctx.rotate(lantern.rotation);
-                ctx.scale(shadowScale * 0.32, shadowScale * 0.28);
-                ctx.translate(-150, -150);
-
-                ctx.drawImage(lantern.silhouette, 0, 0);
-
-                ctx.restore();
-
-                // Layer 2: Medium blur
-                ctx.save();
-                ctx.globalCompositeOperation = 'multiply';
-                ctx.globalAlpha = 0.7;
-                ctx.filter = 'blur(80px)';
-
-                ctx.translate(shadowX, shadowY);
-                ctx.rotate(lantern.rotation);
-                ctx.scale(shadowScale * 0.34, shadowScale * 0.29);
-                ctx.translate(-150, -150);
-
-                ctx.drawImage(lantern.silhouette, 0, 0);
-
-                ctx.restore();
-
-                // Layer 3: Soft outer glow
-                ctx.save();
-                ctx.globalCompositeOperation = 'multiply';
-                ctx.globalAlpha = 0.5;
-                ctx.filter = 'blur(120px)';
-
-                ctx.translate(shadowX, shadowY);
-                ctx.rotate(lantern.rotation);
-                ctx.scale(shadowScale * 0.36, shadowScale * 0.3);
+                ctx.scale(0.5, 0.5);
                 ctx.translate(-150, -150);
 
                 ctx.drawImage(lantern.silhouette, 0, 0);
@@ -461,52 +533,29 @@
 
             renderLanterns() {
                 for (let lantern of this.lanterns) {
-                    this.renderDiptyqueLantern(lantern);
+                    if (lantern.type === 'carousel') {
+                        this.renderCarouselLantern(lantern);
+                    } else {
+                        this.renderHexagonalLantern(lantern);
+                    }
                 }
             },
 
-            renderDiptyqueLantern(lantern) {
+            renderCarouselLantern(lantern) {
                 const ctx = this.ctx;
                 const x = lantern.x;
                 const y = lantern.y;
 
-                // Contact shadow beneath base (soft, grounded)
-                ctx.save();
-                ctx.fillStyle = 'rgba(0, 0, 0, 0.35)';
-                ctx.filter = 'blur(30px)';
-                ctx.beginPath();
-                ctx.ellipse(x, y + lantern.height + 12, 30, 10, 0, 0, Math.PI * 2);
-                ctx.fill();
-                ctx.restore();
+                // Candle
+                this.renderCandle(x, y + lantern.height, lantern.glowColor);
 
-                // Candle glow at base (warm light)
-                const glowPulse = Math.sin(this.time * 3 + lantern.x * 0.01) * 0.15 + 0.85;
-                ctx.save();
-                ctx.globalAlpha = 0.3 * glowPulse;
-                ctx.filter = 'blur(20px)';
-                const glowGradient = ctx.createRadialGradient(x, y + lantern.height - 20, 0, x, y + lantern.height - 20, 50);
-                glowGradient.addColorStop(0, '#FFDC53');
-                glowGradient.addColorStop(1, 'rgba(255, 220, 83, 0)');
-                ctx.fillStyle = glowGradient;
-                ctx.fillRect(x - 50, y + lantern.height - 70, 100, 100);
-                ctx.restore();
-
-                // Base circle with subtle highlight
+                // Base
                 ctx.fillStyle = this.colors.lanternGold;
                 ctx.beginPath();
                 ctx.arc(x, y + lantern.height, 15, 0, Math.PI * 2);
                 ctx.fill();
 
-                // Base highlight (top-left)
-                const baseHighlight = ctx.createRadialGradient(x - 5, y + lantern.height - 5, 0, x - 5, y + lantern.height - 5, 12);
-                baseHighlight.addColorStop(0, 'rgba(255, 255, 200, 0.4)');
-                baseHighlight.addColorStop(1, 'rgba(255, 255, 200, 0)');
-                ctx.fillStyle = baseHighlight;
-                ctx.beginPath();
-                ctx.arc(x, y + lantern.height, 15, 0, Math.PI * 2);
-                ctx.fill();
-
-                // Vertical stand
+                // Stand
                 ctx.strokeStyle = this.colors.lanternGold;
                 ctx.lineWidth = 2;
                 ctx.beginPath();
@@ -514,50 +563,28 @@
                 ctx.lineTo(x, y);
                 ctx.stroke();
 
-                // Top circular plate - outer ring with inner shadow
-                ctx.strokeStyle = this.colors.lanternGold;
-                ctx.lineWidth = 2;
-                ctx.beginPath();
-                ctx.arc(x, y, 50, 0, Math.PI * 2);
-                ctx.stroke();
-
-                // Inner darker stroke for depth
-                ctx.strokeStyle = 'rgba(200, 160, 30, 0.6)';
-                ctx.lineWidth = 1;
-                ctx.beginPath();
-                ctx.arc(x, y, 48, 0, Math.PI * 2);
-                ctx.stroke();
-
-                // Inner circle detail
-                ctx.strokeStyle = this.colors.lanternGold;
-                ctx.lineWidth = 2;
-                ctx.beginPath();
-                ctx.arc(x, y, 45, 0, Math.PI * 2);
-                ctx.stroke();
-
-                // Highlight on upper-left arc of ring
+                // Top ring (elliptical perspective)
                 ctx.save();
-                ctx.strokeStyle = 'rgba(255, 255, 200, 0.5)';
-                ctx.lineWidth = 2;
+                ctx.translate(x, y);
+                ctx.scale(1, 0.3);
+                ctx.strokeStyle = this.colors.lanternGold;
+                ctx.lineWidth = 3;
                 ctx.beginPath();
-                ctx.arc(x, y, 50, Math.PI * 1.2, Math.PI * 1.6);
+                ctx.arc(0, 0, 50, 0, Math.PI * 2);
+                ctx.stroke();
+                ctx.beginPath();
+                ctx.arc(0, 0, 45, 0, Math.PI * 2);
                 ctx.stroke();
                 ctx.restore();
 
-                // 6 hanging wires with silhouette charms
+                // 6 charms
                 for (let i = 0; i < 6; i++) {
                     const angle = lantern.rotation + (i / 6) * Math.PI * 2;
-
-                    // Offset mounting point to hang inside ring
                     const mountX = x + Math.cos(angle) * 38;
-                    const mountY = y + Math.sin(angle) * 38;
+                    const mountY = y + Math.sin(angle) * 38 * 0.3;
+                    const charmX = mountX;
+                    const charmY = y + 60;
 
-                    // Wire hangs down with slight sway
-                    const sway = Math.sin(this.time * 1.5 + i) * 2;
-                    const charmX = mountX + sway;
-                    const charmY = mountY + 60;
-
-                    // Wire
                     ctx.strokeStyle = 'rgba(180, 160, 100, 0.8)';
                     ctx.lineWidth = 1;
                     ctx.beginPath();
@@ -565,7 +592,6 @@
                     ctx.lineTo(charmX, charmY);
                     ctx.stroke();
 
-                    // Charm (flat black silhouette)
                     ctx.save();
                     ctx.translate(charmX, charmY);
                     ctx.scale(0.08, 0.08);
@@ -575,16 +601,87 @@
                 }
             },
 
+            renderHexagonalLantern(lantern) {
+                const ctx = this.ctx;
+                const x = lantern.x;
+                const y = lantern.y;
+
+                // Candle
+                this.renderCandle(x, y + lantern.height, lantern.glowColor);
+
+                // Hexagonal body with pseudo-3D
+                const size = 40;
+
+                // Back faces (darker)
+                ctx.fillStyle = 'rgba(100, 90, 70, 0.6)';
+                ctx.beginPath();
+                ctx.moveTo(x, y - size);
+                ctx.lineTo(x + size * 0.5, y - size * 0.5);
+                ctx.lineTo(x + size * 0.5, y + size * 0.5);
+                ctx.lineTo(x, y + size);
+                ctx.closePath();
+                ctx.fill();
+
+                // Front faces (lighter with glow)
+                ctx.fillStyle = lantern.glowColor;
+                ctx.globalAlpha = 0.3;
+                ctx.beginPath();
+                ctx.moveTo(x, y - size);
+                ctx.lineTo(x - size * 0.5, y - size * 0.5);
+                ctx.lineTo(x - size * 0.5, y + size * 0.5);
+                ctx.lineTo(x, y + size);
+                ctx.closePath();
+                ctx.fill();
+                ctx.globalAlpha = 1;
+
+                // Outline
+                ctx.strokeStyle = this.colors.lanternGold;
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                ctx.moveTo(x, y - size);
+                ctx.lineTo(x + size * 0.5, y - size * 0.5);
+                ctx.lineTo(x + size * 0.5, y + size * 0.5);
+                ctx.lineTo(x, y + size);
+                ctx.lineTo(x - size * 0.5, y + size * 0.5);
+                ctx.lineTo(x - size * 0.5, y - size * 0.5);
+                ctx.closePath();
+                ctx.stroke();
+            },
+
+            renderCandle(x, y, glowColor) {
+                const ctx = this.ctx;
+                const pulse = Math.sin(this.time * 4) * 0.1 + 0.9;
+
+                // Candle glow
+                ctx.save();
+                ctx.globalAlpha = 0.4 * pulse;
+                ctx.filter = 'blur(25px)';
+                const gradient = ctx.createRadialGradient(x, y, 0, x, y, 60);
+                gradient.addColorStop(0, glowColor);
+                gradient.addColorStop(1, 'rgba(255, 220, 83, 0)');
+                ctx.fillStyle = gradient;
+                ctx.fillRect(x - 60, y - 60, 120, 120);
+                ctx.restore();
+
+                // Candle body
+                ctx.fillStyle = '#E8D5B7';
+                ctx.fillRect(x - 4, y - 5, 8, 15);
+
+                // Flame
+                ctx.fillStyle = '#FFD700';
+                ctx.beginPath();
+                ctx.ellipse(x, y - 8, 3, 5 * pulse, 0, 0, Math.PI * 2);
+                ctx.fill();
+            },
+
             renderGlowingDot() {
                 const ctx = this.ctx;
                 const polygon = this.getTablePolygon();
                 const x = polygon[3].x + (polygon[2].x - polygon[3].x) * 0.15;
                 const y = polygon[3].y - 40;
 
-                // Pulsating halo
                 const pulse = Math.sin(this.time * 2) * 0.5 + 0.5;
 
-                // Outer ripples
                 for (let i = 0; i < 3; i++) {
                     const phase = (this.time * 1.5 + i * 0.4) % 1;
                     const radius = 10 + phase * 30;
@@ -597,61 +694,24 @@
                     ctx.stroke();
                 }
 
-                // Center dot
                 ctx.fillStyle = `rgba(255, 255, 255, ${0.8 + pulse * 0.2})`;
                 ctx.beginPath();
                 ctx.arc(x, y, 8, 0, Math.PI * 2);
                 ctx.fill();
             },
 
-            renderGlobalLighting() {
+            renderDarkOverlay() {
                 const ctx = this.ctx;
-
-                // Warm vignette around entire scene edges
-                // Top vignette
-                const topVignette = ctx.createLinearGradient(0, 0, 0, 120);
-                topVignette.addColorStop(0, 'rgba(40, 30, 20, 0.3)');
-                topVignette.addColorStop(1, 'rgba(40, 30, 20, 0)');
-                ctx.fillStyle = topVignette;
-                ctx.fillRect(0, 0, this.width, 120);
-
-                // Bottom vignette
-                const bottomVignette = ctx.createLinearGradient(0, this.height - 120, 0, this.height);
-                bottomVignette.addColorStop(0, 'rgba(40, 30, 20, 0)');
-                bottomVignette.addColorStop(1, 'rgba(40, 30, 20, 0.3)');
-                ctx.fillStyle = bottomVignette;
-                ctx.fillRect(0, this.height - 120, this.width, 120);
-
-                // Left vignette
-                const leftVignette = ctx.createLinearGradient(0, 0, 100, 0);
-                leftVignette.addColorStop(0, 'rgba(40, 30, 20, 0.25)');
-                leftVignette.addColorStop(1, 'rgba(40, 30, 20, 0)');
-                ctx.fillStyle = leftVignette;
-                ctx.fillRect(0, 0, 100, this.height);
-
-                // Right vignette
-                const rightVignette = ctx.createLinearGradient(this.width - 100, 0, this.width, 0);
-                rightVignette.addColorStop(0, 'rgba(40, 30, 20, 0)');
-                rightVignette.addColorStop(1, 'rgba(40, 30, 20, 0.25)');
-                ctx.fillStyle = rightVignette;
-                ctx.fillRect(this.width - 100, 0, 100, this.height);
-
-                // Radial vignette for corners
-                const radialVignette = ctx.createRadialGradient(
-                    this.width / 2, this.height / 2, this.height * 0.3,
-                    this.width / 2, this.height / 2, this.height * 0.8
-                );
-                radialVignette.addColorStop(0, 'rgba(40, 30, 20, 0)');
-                radialVignette.addColorStop(1, 'rgba(40, 30, 20, 0.2)');
-                ctx.fillStyle = radialVignette;
+                ctx.fillStyle = 'rgba(0, 0, 0, 0.15)';
                 ctx.fillRect(0, 0, this.width, this.height);
             },
 
             updatePhysics() {
                 for (let lantern of this.lanterns) {
-                    // Apply rotation speed and ease to stop
-                    lantern.rotation += lantern.rotationSpeed;
-                    lantern.rotationSpeed *= 0.94;
+                    if (lantern.type === 'carousel') {
+                        lantern.rotation += lantern.rotationSpeed;
+                        lantern.rotationSpeed *= 0.94;
+                    }
                 }
             }
         };
