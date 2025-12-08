@@ -277,6 +277,7 @@
                 this.renderShadows();
                 this.renderLanterns();
                 this.renderGlowingDot();
+                this.renderGlobalLighting();
 
                 // Update physics
                 this.updatePhysics();
@@ -292,14 +293,37 @@
                 ctx.fillStyle = this.colors.wall;
                 ctx.fillRect(splitX, 0, this.width - splitX, this.height);
 
-                // Table (left side) - subtle vertical gradient
+                // Table (left side) - 3D plane feeling with depth gradient
                 const tableTop = this.height * 0.65;
-                const gradient = ctx.createLinearGradient(0, tableTop, 0, this.height);
-                gradient.addColorStop(0, this.colors.table);
-                gradient.addColorStop(1, this.colors.tableDark);
 
-                ctx.fillStyle = gradient;
+                // Main table gradient (darker at bottom, lighter at top/edge)
+                const tableGradient = ctx.createLinearGradient(0, tableTop, 0, this.height);
+                tableGradient.addColorStop(0, '#C8BFB0'); // Lighter at edge
+                tableGradient.addColorStop(0.3, this.colors.table);
+                tableGradient.addColorStop(1, '#8A8070'); // Darker at bottom
+
+                ctx.fillStyle = tableGradient;
                 ctx.fillRect(0, tableTop, splitX, this.height - tableTop);
+
+                // Horizontal highlight near table edge (light grazing effect)
+                const edgeGradient = ctx.createLinearGradient(0, tableTop, 0, tableTop + 30);
+                edgeGradient.addColorStop(0, 'rgba(255, 252, 241, 0.25)');
+                edgeGradient.addColorStop(1, 'rgba(255, 252, 241, 0)');
+                ctx.fillStyle = edgeGradient;
+                ctx.fillRect(0, tableTop, splitX, 30);
+
+                // Soft vignette at left and right edges for depth
+                const leftVignette = ctx.createLinearGradient(0, tableTop, 100, tableTop);
+                leftVignette.addColorStop(0, 'rgba(0, 0, 0, 0.15)');
+                leftVignette.addColorStop(1, 'rgba(0, 0, 0, 0)');
+                ctx.fillStyle = leftVignette;
+                ctx.fillRect(0, tableTop, 100, this.height - tableTop);
+
+                const rightVignette = ctx.createLinearGradient(splitX - 100, tableTop, splitX, tableTop);
+                rightVignette.addColorStop(0, 'rgba(0, 0, 0, 0)');
+                rightVignette.addColorStop(1, 'rgba(0, 0, 0, 0.15)');
+                ctx.fillStyle = rightVignette;
+                ctx.fillRect(splitX - 100, tableTop, 100, this.height - tableTop);
 
                 // Floor/background above table
                 ctx.fillStyle = '#A8A199';
@@ -329,14 +353,31 @@
                 // Shadow scale (1.8x to 2.2x)
                 const shadowScale = 2.0;
 
-                // Render shadow with heavy blur
+                // Render darker shadow with directional stretch
                 ctx.save();
-                ctx.globalAlpha = 0.25;
-                ctx.filter = 'blur(80px)';
+
+                // Double-layer shadow for depth and darkness
+                // Layer 1: Sharp center (darker)
+                ctx.globalAlpha = 0.5;
+                ctx.filter = 'blur(60px)';
 
                 ctx.translate(shadowX, shadowY);
                 ctx.rotate(lantern.rotation);
-                ctx.scale(shadowScale * 0.3, shadowScale * 0.3);
+                ctx.scale(shadowScale * 0.32, shadowScale * 0.28); // Slight horizontal stretch
+                ctx.translate(-150, -150);
+
+                ctx.drawImage(lantern.silhouette, 0, 0);
+
+                ctx.restore();
+
+                // Layer 2: Soft outer glow (lighter, more diffused)
+                ctx.save();
+                ctx.globalAlpha = 0.25;
+                ctx.filter = 'blur(100px)';
+
+                ctx.translate(shadowX, shadowY);
+                ctx.rotate(lantern.rotation);
+                ctx.scale(shadowScale * 0.35, shadowScale * 0.3);
                 ctx.translate(-150, -150);
 
                 ctx.drawImage(lantern.silhouette, 0, 0);
@@ -355,17 +396,38 @@
                 const x = lantern.x;
                 const y = lantern.y;
 
-                // Drop shadow beneath base
+                // Contact shadow beneath base (soft, grounded)
                 ctx.save();
-                ctx.fillStyle = 'rgba(0, 0, 0, 0.25)';
-                ctx.filter = 'blur(15px)';
+                ctx.fillStyle = 'rgba(0, 0, 0, 0.35)';
+                ctx.filter = 'blur(30px)';
                 ctx.beginPath();
-                ctx.ellipse(x, y + lantern.height + 10, 25, 8, 0, 0, Math.PI * 2);
+                ctx.ellipse(x, y + lantern.height + 12, 30, 10, 0, 0, Math.PI * 2);
                 ctx.fill();
                 ctx.restore();
 
-                // Base circle
+                // Candle glow at base (warm light)
+                const glowPulse = Math.sin(this.time * 3 + lantern.x * 0.01) * 0.15 + 0.85;
+                ctx.save();
+                ctx.globalAlpha = 0.3 * glowPulse;
+                ctx.filter = 'blur(20px)';
+                const glowGradient = ctx.createRadialGradient(x, y + lantern.height - 20, 0, x, y + lantern.height - 20, 50);
+                glowGradient.addColorStop(0, '#FFDC53');
+                glowGradient.addColorStop(1, 'rgba(255, 220, 83, 0)');
+                ctx.fillStyle = glowGradient;
+                ctx.fillRect(x - 50, y + lantern.height - 70, 100, 100);
+                ctx.restore();
+
+                // Base circle with subtle highlight
                 ctx.fillStyle = this.colors.lanternGold;
+                ctx.beginPath();
+                ctx.arc(x, y + lantern.height, 15, 0, Math.PI * 2);
+                ctx.fill();
+
+                // Base highlight (top-left)
+                const baseHighlight = ctx.createRadialGradient(x - 5, y + lantern.height - 5, 0, x - 5, y + lantern.height - 5, 12);
+                baseHighlight.addColorStop(0, 'rgba(255, 255, 200, 0.4)');
+                baseHighlight.addColorStop(1, 'rgba(255, 255, 200, 0)');
+                ctx.fillStyle = baseHighlight;
                 ctx.beginPath();
                 ctx.arc(x, y + lantern.height, 15, 0, Math.PI * 2);
                 ctx.fill();
@@ -378,36 +440,60 @@
                 ctx.lineTo(x, y);
                 ctx.stroke();
 
-                // Top circular plate
+                // Top circular plate - outer ring with inner shadow
                 ctx.strokeStyle = this.colors.lanternGold;
                 ctx.lineWidth = 2;
                 ctx.beginPath();
                 ctx.arc(x, y, 50, 0, Math.PI * 2);
                 ctx.stroke();
 
+                // Inner darker stroke for depth
+                ctx.strokeStyle = 'rgba(200, 160, 30, 0.6)';
+                ctx.lineWidth = 1;
+                ctx.beginPath();
+                ctx.arc(x, y, 48, 0, Math.PI * 2);
+                ctx.stroke();
+
                 // Inner circle detail
+                ctx.strokeStyle = this.colors.lanternGold;
+                ctx.lineWidth = 2;
                 ctx.beginPath();
                 ctx.arc(x, y, 45, 0, Math.PI * 2);
                 ctx.stroke();
 
+                // Highlight on upper-left arc of ring
+                ctx.save();
+                ctx.strokeStyle = 'rgba(255, 255, 200, 0.5)';
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                ctx.arc(x, y, 50, Math.PI * 1.2, Math.PI * 1.6);
+                ctx.stroke();
+                ctx.restore();
+
                 // 6 hanging wires with silhouette charms
                 for (let i = 0; i < 6; i++) {
                     const angle = lantern.rotation + (i / 6) * Math.PI * 2;
-                    const wireX = x + Math.cos(angle) * 42;
-                    const wireY = y + Math.sin(angle) * 42;
-                    const charmY = wireY + 60;
+
+                    // Offset mounting point to hang inside ring
+                    const mountX = x + Math.cos(angle) * 38;
+                    const mountY = y + Math.sin(angle) * 38;
+
+                    // Wire hangs down with slight sway
+                    const sway = Math.sin(this.time * 1.5 + i) * 2;
+                    const charmX = mountX + sway;
+                    const charmY = mountY + 60;
 
                     // Wire
-                    ctx.strokeStyle = this.colors.lanternGold;
+                    ctx.strokeStyle = 'rgba(180, 160, 100, 0.8)';
                     ctx.lineWidth = 1;
                     ctx.beginPath();
-                    ctx.moveTo(wireX, wireY);
-                    ctx.lineTo(wireX, charmY);
+                    ctx.moveTo(mountX, mountY);
+                    ctx.lineTo(charmX, charmY);
                     ctx.stroke();
 
                     // Charm (flat black silhouette)
                     ctx.save();
-                    ctx.translate(wireX, charmY);
+                    ctx.translate(charmX, charmY);
                     ctx.scale(0.08, 0.08);
                     ctx.translate(-150, -150);
                     ctx.drawImage(lantern.silhouette, 0, 0);
@@ -441,6 +527,49 @@
                 ctx.beginPath();
                 ctx.arc(x, y, 8, 0, Math.PI * 2);
                 ctx.fill();
+            },
+
+            renderGlobalLighting() {
+                const ctx = this.ctx;
+
+                // Warm vignette around entire scene edges
+                // Top vignette
+                const topVignette = ctx.createLinearGradient(0, 0, 0, 120);
+                topVignette.addColorStop(0, 'rgba(40, 30, 20, 0.3)');
+                topVignette.addColorStop(1, 'rgba(40, 30, 20, 0)');
+                ctx.fillStyle = topVignette;
+                ctx.fillRect(0, 0, this.width, 120);
+
+                // Bottom vignette
+                const bottomVignette = ctx.createLinearGradient(0, this.height - 120, 0, this.height);
+                bottomVignette.addColorStop(0, 'rgba(40, 30, 20, 0)');
+                bottomVignette.addColorStop(1, 'rgba(40, 30, 20, 0.3)');
+                ctx.fillStyle = bottomVignette;
+                ctx.fillRect(0, this.height - 120, this.width, 120);
+
+                // Left vignette
+                const leftVignette = ctx.createLinearGradient(0, 0, 100, 0);
+                leftVignette.addColorStop(0, 'rgba(40, 30, 20, 0.25)');
+                leftVignette.addColorStop(1, 'rgba(40, 30, 20, 0)');
+                ctx.fillStyle = leftVignette;
+                ctx.fillRect(0, 0, 100, this.height);
+
+                // Right vignette
+                const rightVignette = ctx.createLinearGradient(this.width - 100, 0, this.width, 0);
+                rightVignette.addColorStop(0, 'rgba(40, 30, 20, 0)');
+                rightVignette.addColorStop(1, 'rgba(40, 30, 20, 0.25)');
+                ctx.fillStyle = rightVignette;
+                ctx.fillRect(this.width - 100, 0, 100, this.height);
+
+                // Radial vignette for corners
+                const radialVignette = ctx.createRadialGradient(
+                    this.width / 2, this.height / 2, this.height * 0.3,
+                    this.width / 2, this.height / 2, this.height * 0.8
+                );
+                radialVignette.addColorStop(0, 'rgba(40, 30, 20, 0)');
+                radialVignette.addColorStop(1, 'rgba(40, 30, 20, 0.2)');
+                ctx.fillStyle = radialVignette;
+                ctx.fillRect(0, 0, this.width, this.height);
             },
 
             updatePhysics() {
