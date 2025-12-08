@@ -163,11 +163,25 @@
             focusedLantern: null,
             pendingLanternType: null,
 
+            // Matchsticks
+            matchsticks: [
+                { color: 'Blue', flameColor: '#4A90E2', glowColor: '#B3D9FF', x: 0, y: 0 },
+                { color: 'Green', flameColor: '#7ED321', glowColor: '#C8F7C5', x: 0, y: 0 },
+                { color: 'Purple', flameColor: '#BD10E0', glowColor: '#E8B3FF', x: 0, y: 0 },
+                { color: 'Pink', flameColor: '#FF6B9D', glowColor: '#FFB3D9', x: 0, y: 0 },
+                { color: 'Red', flameColor: '#E74C3C', glowColor: '#FFB3B3', x: 0, y: 0 },
+                { color: 'Yellow', flameColor: '#FFD700', glowColor: '#FFFAED', x: 0, y: 0 }
+            ],
+            draggedMatchstick: null,
+            matchstickDragOffset: { x: 0, y: 0 },
+
             // Interaction
             isDragging: false,
             dragMode: null,
             lastMouseX: 0,
             lastMouseY: 0,
+            currentMouseX: 0,
+            currentMouseY: 0,
 
             // Animation
             time: 0,
@@ -192,6 +206,95 @@
                 ];
             },
 
+            updateMatchstickPositions() {
+                const startY = this.height * 0.2;
+                const spacing = this.height * 0.1;
+                const x = this.width - 50;
+
+                for (let i = 0; i < this.matchsticks.length; i++) {
+                    this.matchsticks[i].x = x;
+                    this.matchsticks[i].y = startY + i * spacing;
+                }
+            },
+
+            hexToRgb(hex) {
+                const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+                return result ? {
+                    r: parseInt(result[1], 16),
+                    g: parseInt(result[2], 16),
+                    b: parseInt(result[3], 16)
+                } : null;
+            },
+
+            blendColors(color1, color2, ratio) {
+                const rgb1 = this.hexToRgb(color1);
+                const rgb2 = this.hexToRgb(color2);
+                if (!rgb1 || !rgb2) return color1;
+
+                const r = Math.round(rgb1.r * (1 - ratio) + rgb2.r * ratio);
+                const g = Math.round(rgb1.g * (1 - ratio) + rgb2.g * ratio);
+                const b = Math.round(rgb1.b * (1 - ratio) + rgb2.b * ratio);
+
+                return `rgb(${r}, ${g}, ${b})`;
+            },
+
+            isPointInPolygon(x, y, polygon) {
+                let inside = false;
+                for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
+                    const xi = polygon[i].x, yi = polygon[i].y;
+                    const xj = polygon[j].x, yj = polygon[j].y;
+
+                    const intersect = ((yi > y) !== (yj > y))
+                        && (x < (xj - xi) * (y - yi) / (yj - yi) + xi);
+                    if (intersect) inside = !inside;
+                }
+                return inside;
+            },
+
+            constrainToTable(x, y) {
+                const polygon = this.getTablePolygon();
+
+                // Simple constraint: check if point is in polygon, if not, clamp to nearest edge
+                if (this.isPointInPolygon(x, y, polygon)) {
+                    return { x, y };
+                }
+
+                // Find closest point on polygon edges
+                let minDist = Infinity;
+                let closestX = x;
+                let closestY = y;
+
+                for (let i = 0; i < polygon.length; i++) {
+                    const p1 = polygon[i];
+                    const p2 = polygon[(i + 1) % polygon.length];
+
+                    // Project point onto line segment
+                    const dx = p2.x - p1.x;
+                    const dy = p2.y - p1.y;
+                    const t = Math.max(0, Math.min(1, ((x - p1.x) * dx + (y - p1.y) * dy) / (dx * dx + dy * dy)));
+                    const projX = p1.x + t * dx;
+                    const projY = p1.y + t * dy;
+
+                    const dist = Math.sqrt((x - projX) ** 2 + (y - projY) ** 2);
+                    if (dist < minDist) {
+                        minDist = dist;
+                        closestX = projX;
+                        closestY = projY;
+                    }
+                }
+
+                // Move point slightly inward from edge
+                const centerX = (polygon[0].x + polygon[1].x + polygon[2].x + polygon[3].x) / 4;
+                const centerY = (polygon[0].y + polygon[1].y + polygon[2].y + polygon[3].y) / 4;
+                const toCenter = { x: centerX - closestX, y: centerY - closestY };
+                const mag = Math.sqrt(toCenter.x ** 2 + toCenter.y ** 2);
+
+                return {
+                    x: closestX + (toCenter.x / mag) * 20,
+                    y: closestY + (toCenter.y / mag) * 20
+                };
+            },
+
             init() {
                 this.canvas = document.getElementById('mainCanvas');
                 this.ctx = this.canvas.getContext('2d');
@@ -211,6 +314,7 @@
                 this.height = window.innerHeight;
                 this.canvas.width = this.width;
                 this.canvas.height = this.height;
+                this.updateMatchstickPositions();
             },
 
             setupEventListeners() {
@@ -248,6 +352,17 @@
                 const x = e.clientX - rect.left;
                 const y = e.clientY - rect.top;
 
+                // Check matchsticks
+                for (let matchstick of this.matchsticks) {
+                    const dist = Math.sqrt((x - matchstick.x) ** 2 + (y - matchstick.y) ** 2);
+                    if (dist < 25) {
+                        this.draggedMatchstick = matchstick;
+                        this.matchstickDragOffset.x = x - matchstick.x;
+                        this.matchstickDragOffset.y = y - matchstick.y;
+                        return;
+                    }
+                }
+
                 // Check glowing dot
                 const polygon = this.getTablePolygon();
                 const dotX = polygon[3].x + (polygon[2].x - polygon[3].x) * 0.15;
@@ -259,10 +374,10 @@
                     return;
                 }
 
-                // Check lanterns
+                // Check lanterns (larger hit detection for bigger lanterns)
                 for (let lantern of this.lanterns) {
                     const lDist = Math.sqrt((x - lantern.x) ** 2 + (y - lantern.y) ** 2);
-                    if (lDist < 80) {
+                    if (lDist < 110) {
                         this.activeLantern = lantern;
                         this.isDragging = true;
                         this.dragMode = 'rotate';
@@ -274,11 +389,35 @@
             },
 
             handleMouseMove(e) {
-                if (!this.isDragging || !this.activeLantern) return;
-
                 const rect = this.canvas.getBoundingClientRect();
                 const x = e.clientX - rect.left;
                 const y = e.clientY - rect.top;
+
+                this.currentMouseX = x;
+                this.currentMouseY = y;
+
+                // Handle matchstick dragging
+                if (this.draggedMatchstick) {
+                    const matchstickX = x - this.matchstickDragOffset.x;
+                    const matchstickY = y - this.matchstickDragOffset.y;
+
+                    // Check collision with any lantern's candle
+                    for (let lantern of this.lanterns) {
+                        const candleX = lantern.x;
+                        const candleY = lantern.y + lantern.height;
+                        const dist = Math.sqrt((matchstickX - candleX) ** 2 + (matchstickY - candleY) ** 2);
+
+                        if (dist < 30) {
+                            // Change flame color
+                            lantern.glowColor = this.draggedMatchstick.glowColor;
+                            lantern.flameColor = this.draggedMatchstick.flameColor;
+                        }
+                    }
+                    return;
+                }
+
+                if (!this.isDragging || !this.activeLantern) return;
+
                 const deltaX = x - this.lastMouseX;
                 const deltaY = y - this.lastMouseY;
 
@@ -288,9 +427,12 @@
                     this.activeLantern.rotation += deltaX * 0.02;
                     this.activeLantern.rotationSpeed = deltaX * 0.02;
                 } else {
-                    // Free movement in all directions
-                    this.activeLantern.x += deltaX;
-                    this.activeLantern.y += deltaY;
+                    // Free movement in all directions with table constraints
+                    const newX = this.activeLantern.x + deltaX;
+                    const newY = this.activeLantern.y + deltaY;
+                    const constrained = this.constrainToTable(newX, newY);
+                    this.activeLantern.x = constrained.x;
+                    this.activeLantern.y = constrained.y;
                 }
 
                 this.lastMouseX = x;
@@ -301,6 +443,7 @@
                 this.isDragging = false;
                 this.dragMode = null;
                 this.activeLantern = null;
+                this.draggedMatchstick = null;
             },
 
             handleDoubleClick(e) {
@@ -314,10 +457,10 @@
                     return;
                 }
 
-                // Check if double-clicking on a lantern
+                // Check if double-clicking on a lantern (larger hit detection)
                 for (let lantern of this.lanterns) {
                     const lDist = Math.sqrt((x - lantern.x) ** 2 + (y - lantern.y) ** 2);
-                    if (lDist < 80) {
+                    if (lDist < 110) {
                         this.focusedLantern = lantern;
                         return;
                     }
@@ -356,14 +499,17 @@
                 const dotX = polygon[3].x + (polygon[2].x - polygon[3].x) * 0.15;
                 const dotY = polygon[3].y - 40;
 
+                // Generate random height between 80 and 120
+                const randomHeight = 80 + Math.random() * 40;
+
                 this.lanterns.push({
                     type: 'carousel',
                     x: dotX,
-                    y: dotY - 80,
+                    y: dotY - randomHeight,
                     rotation: 0,
                     rotationSpeed: 0,
                     silhouette: silhouetteCanvas,
-                    height: 100,
+                    height: randomHeight,
                     glowColor: '#FFFAED'
                 });
 
@@ -384,6 +530,7 @@
                     this.renderShadows();
                     this.renderLanterns();
                     this.renderGlowingDot();
+                    this.renderMatchsticks();
                     this.renderDarkOverlay();
                 }
 
@@ -440,11 +587,30 @@
                 const candleX = lantern.x;
                 const candleY = lantern.y + lantern.height;
 
+                // Calculate distance to wall
+                const distToWall = Math.abs(wallX - lantern.x);
+                const maxDist = this.width * 0.35;
+                const distRatio = Math.min(distToWall / maxDist, 1);
+
+                // Map distance to shadow scale (1.3 to 1.8) and multiply by 1.6×
+                const baseScale = 1.3 + (1.8 - 1.3) * distRatio;
+                const shadowScale = baseScale * 1.6;
+
+                // Map distance to shadow opacity (0.55 to 0.25)
+                const shadowOpacity = 0.55 - (0.55 - 0.25) * distRatio;
+
+                // Get flame color for subtle tinting
+                const flameColor = lantern.flameColor || '#FFD700';
+
+                // Match the larger lantern dimensions
+                const mountRadius = 55;
+                const charmDropHeight = 80;
+
                 // Render individual charm shadows (6-petal pattern)
                 for (let i = 0; i < 6; i++) {
                     const angle = lantern.rotation + (i / 6) * Math.PI * 2;
-                    const charmX = lantern.x + Math.cos(angle) * 38;
-                    const charmY = lantern.y + Math.sin(angle) * 38 * 0.3 + 60;
+                    const charmX = lantern.x + Math.cos(angle) * mountRadius;
+                    const charmY = lantern.y + Math.sin(angle) * mountRadius * 0.3 + charmDropHeight;
 
                     const dx = charmX - candleX;
                     const dy = charmY - candleY;
@@ -454,17 +620,24 @@
                     const shadowX = wallX + (dx / dist) * shadowDist;
                     const shadowY = this.height * 0.4 + (dy / dist) * shadowDist * 0.4;
 
-                    // Crisp shadow with reduced blur (10px)
+                    // Sharp shadow with 8-15px edge feather, scaled for larger charms
                     ctx.save();
-                    ctx.globalAlpha = 0.45;
-                    ctx.filter = 'blur(10px)';
+                    ctx.globalCompositeOperation = 'multiply';
+                    ctx.globalAlpha = shadowOpacity;
+                    ctx.filter = 'blur(12px)';
 
                     ctx.translate(shadowX, shadowY);
                     ctx.rotate(lantern.rotation + (i / 6) * Math.PI * 2);
-                    ctx.scale(0.18, 0.18);
+                    ctx.scale(0.12 * shadowScale, 0.12 * shadowScale);
                     ctx.translate(-150, -150);
 
                     ctx.drawImage(lantern.silhouette, 0, 0);
+
+                    // Add subtle flame color tint to shadow
+                    ctx.globalCompositeOperation = 'source-atop';
+                    ctx.globalAlpha = 0.08;
+                    ctx.fillStyle = flameColor;
+                    ctx.fillRect(0, 0, 300, 300);
 
                     ctx.restore();
                 }
@@ -473,7 +646,7 @@
 
             renderLanterns() {
                 for (let lantern of this.lanterns) {
-                    this.renderCandle(lantern.x, lantern.y + lantern.height, lantern.glowColor);
+                    this.renderCandle(lantern.x, lantern.y + lantern.height, lantern.glowColor, lantern.flameColor);
                     this.renderCarouselLantern(lantern);
                 }
             },
@@ -483,37 +656,48 @@
                 const x = lantern.x;
                 const y = lantern.y;
 
-                // Base (gold with micro-3D)
+                // Tint colors based on flame color (subtle 15% blend)
+                const flameColor = lantern.flameColor || '#FFD700';
+                const tintedGold = this.blendColors(this.colors.lanternGold, flameColor, 0.15);
+                const tintedHighlight = this.blendColors('#FFFFC8', flameColor, 0.2);
+
+                // Increased sizes
+                const ringRadius = 70; // Increased from 50
+                const mountRadius = 55; // Increased from 38
+                const charmScale = 0.12; // Increased from 0.08
+                const charmDropHeight = 80; // Increased from 60
+
+                // Base (gold with micro-3D) - larger
                 ctx.save();
                 ctx.shadowColor = 'rgba(0, 0, 0, 0.3)';
                 ctx.shadowBlur = 8;
                 ctx.shadowOffsetY = 3;
-                ctx.fillStyle = this.colors.lanternGold;
+                ctx.fillStyle = tintedGold;
                 ctx.beginPath();
-                ctx.arc(x, y + lantern.height, 15, 0, Math.PI * 2);
+                ctx.arc(x, y + lantern.height, 20, 0, Math.PI * 2);
                 ctx.fill();
                 ctx.restore();
 
                 // Highlight on base
-                ctx.fillStyle = 'rgba(255, 255, 200, 0.4)';
+                ctx.fillStyle = tintedHighlight.replace('rgb', 'rgba').replace(')', ', 0.4)');
                 ctx.beginPath();
-                ctx.arc(x - 3, y + lantern.height - 3, 8, 0, Math.PI * 2);
+                ctx.arc(x - 4, y + lantern.height - 4, 10, 0, Math.PI * 2);
                 ctx.fill();
 
-                // Vertical stand (static, doesn't rotate)
-                ctx.strokeStyle = this.colors.lanternGold;
-                ctx.lineWidth = 2.5;
+                // Vertical stand (static, doesn't rotate) - thicker
+                ctx.strokeStyle = tintedGold;
+                ctx.lineWidth = 3.5;
                 ctx.beginPath();
                 ctx.moveTo(x, y + lantern.height);
                 ctx.lineTo(x, y);
                 ctx.stroke();
 
                 // Inner shadow on stand
-                ctx.strokeStyle = 'rgba(200, 160, 30, 0.5)';
-                ctx.lineWidth = 1;
+                ctx.strokeStyle = this.blendColors('#C8A01E', flameColor, 0.15).replace('rgb', 'rgba').replace(')', ', 0.5)');
+                ctx.lineWidth = 1.5;
                 ctx.beginPath();
-                ctx.moveTo(x + 1, y + lantern.height);
-                ctx.lineTo(x + 1, y);
+                ctx.moveTo(x + 1.5, y + lantern.height);
+                ctx.lineTo(x + 1.5, y);
                 ctx.stroke();
 
                 // Top ring (elliptical perspective - rotates)
@@ -522,65 +706,76 @@
                 ctx.scale(1, 0.3);
 
                 // Outer ring
-                ctx.strokeStyle = this.colors.lanternGold;
-                ctx.lineWidth = 3;
+                ctx.strokeStyle = tintedGold;
+                ctx.lineWidth = 4;
                 ctx.beginPath();
-                ctx.arc(0, 0, 50, 0, Math.PI * 2);
+                ctx.arc(0, 0, ringRadius, 0, Math.PI * 2);
                 ctx.stroke();
 
                 // Inner shadow
-                ctx.strokeStyle = 'rgba(200, 160, 30, 0.6)';
-                ctx.lineWidth = 1.5;
+                ctx.strokeStyle = this.blendColors('#C8A01E', flameColor, 0.15).replace('rgb', 'rgba').replace(')', ', 0.6)');
+                ctx.lineWidth = 2;
                 ctx.beginPath();
-                ctx.arc(0, 0, 48, 0, Math.PI * 2);
+                ctx.arc(0, 0, ringRadius - 3, 0, Math.PI * 2);
                 ctx.stroke();
 
                 // Inner ring
-                ctx.strokeStyle = this.colors.lanternGold;
-                ctx.lineWidth = 2;
+                ctx.strokeStyle = tintedGold;
+                ctx.lineWidth = 2.5;
                 ctx.beginPath();
-                ctx.arc(0, 0, 45, 0, Math.PI * 2);
+                ctx.arc(0, 0, ringRadius - 7, 0, Math.PI * 2);
                 ctx.stroke();
 
                 // Highlight arc
-                ctx.strokeStyle = 'rgba(255, 255, 200, 0.6)';
-                ctx.lineWidth = 2;
+                ctx.strokeStyle = tintedHighlight.replace('rgb', 'rgba').replace(')', ', 0.6)');
+                ctx.lineWidth = 2.5;
                 ctx.beginPath();
-                ctx.arc(0, 0, 50, Math.PI * 1.2, Math.PI * 1.5);
+                ctx.arc(0, 0, ringRadius, Math.PI * 1.2, Math.PI * 1.5);
                 ctx.stroke();
 
                 ctx.restore();
 
-                // 6 charms (rotate with ring)
+                // 6 charms (rotate with ring) - with flame color tint
                 for (let i = 0; i < 6; i++) {
                     const angle = lantern.rotation + (i / 6) * Math.PI * 2;
-                    const mountX = x + Math.cos(angle) * 38;
-                    const mountY = y + Math.sin(angle) * 38 * 0.3;
+                    const mountX = x + Math.cos(angle) * mountRadius;
+                    const mountY = y + Math.sin(angle) * mountRadius * 0.3;
                     const charmX = mountX;
-                    const charmY = y + 60;
+                    const charmY = y + charmDropHeight;
 
                     // Wire
-                    ctx.strokeStyle = 'rgba(200, 180, 120, 0.9)';
-                    ctx.lineWidth = 1;
+                    ctx.strokeStyle = this.blendColors('#C8B478', flameColor, 0.15).replace('rgb', 'rgba').replace(')', ', 0.9)');
+                    ctx.lineWidth = 1.5;
                     ctx.beginPath();
                     ctx.moveTo(mountX, mountY);
                     ctx.lineTo(charmX, charmY);
                     ctx.stroke();
 
-                    // Charm
+                    // Charm with flame color tint overlay
                     ctx.save();
                     ctx.translate(charmX, charmY);
-                    ctx.scale(0.08, 0.08);
+                    ctx.scale(charmScale, charmScale);
                     ctx.translate(-150, -150);
+
+                    // Draw base silhouette
                     ctx.drawImage(lantern.silhouette, 0, 0);
+
+                    // Apply subtle flame color tint
+                    ctx.globalCompositeOperation = 'multiply';
+                    ctx.globalAlpha = 0.1;
+                    ctx.fillStyle = flameColor;
+                    ctx.fillRect(0, 0, 300, 300);
+
                     ctx.restore();
                 }
             },
 
 
-            renderCandle(x, y, glowColor) {
+            renderCandle(x, y, glowColor, flameColor) {
                 const ctx = this.ctx;
                 const pulse = Math.sin(this.time * 4) * 0.08 + 0.92;
+
+                flameColor = flameColor || '#FFD700';
 
                 // Candle glow
                 ctx.save();
@@ -602,13 +797,13 @@
                 ctx.fillRect(x - 3, y - 5, 1, 15);
 
                 // Flame
-                ctx.fillStyle = '#FFD700';
+                ctx.fillStyle = flameColor;
                 ctx.beginPath();
                 ctx.ellipse(x, y - 8, 3, 5 * pulse, 0, 0, Math.PI * 2);
                 ctx.fill();
 
-                // Flame highlight
-                ctx.fillStyle = '#FFF8DC';
+                // Flame highlight (lighter version)
+                ctx.fillStyle = 'rgba(255, 255, 255, 0.6)';
                 ctx.beginPath();
                 ctx.ellipse(x - 1, y - 9, 1.5, 2.5 * pulse, 0, 0, Math.PI * 2);
                 ctx.fill();
@@ -640,9 +835,68 @@
                 ctx.fill();
             },
 
+            renderMatchsticks() {
+                const ctx = this.ctx;
+
+                for (let matchstick of this.matchsticks) {
+                    if (matchstick === this.draggedMatchstick) continue;
+
+                    const x = matchstick.x;
+                    const y = matchstick.y;
+
+                    // Matchstick stick (wooden part)
+                    ctx.fillStyle = '#D2A679';
+                    ctx.fillRect(x - 2, y - 25, 4, 40);
+
+                    // Matchstick head (colored)
+                    ctx.fillStyle = matchstick.flameColor;
+                    ctx.beginPath();
+                    ctx.arc(x, y - 27, 5, 0, Math.PI * 2);
+                    ctx.fill();
+
+                    // Subtle glow
+                    ctx.save();
+                    ctx.globalAlpha = 0.3;
+                    ctx.filter = 'blur(8px)';
+                    ctx.fillStyle = matchstick.glowColor;
+                    ctx.beginPath();
+                    ctx.arc(x, y - 27, 10, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.restore();
+                }
+
+                // Render dragged matchstick on top
+                if (this.draggedMatchstick) {
+                    const mouseX = this.currentMouseX || this.draggedMatchstick.x;
+                    const mouseY = this.currentMouseY || this.draggedMatchstick.y;
+                    const x = mouseX - this.matchstickDragOffset.x;
+                    const y = mouseY - this.matchstickDragOffset.y;
+
+                    // Matchstick stick
+                    ctx.fillStyle = '#D2A679';
+                    ctx.fillRect(x - 2, y - 25, 4, 40);
+
+                    // Matchstick head
+                    ctx.fillStyle = this.draggedMatchstick.flameColor;
+                    ctx.beginPath();
+                    ctx.arc(x, y - 27, 5, 0, Math.PI * 2);
+                    ctx.fill();
+
+                    // Enhanced glow when dragging
+                    ctx.save();
+                    ctx.globalAlpha = 0.5;
+                    ctx.filter = 'blur(15px)';
+                    ctx.fillStyle = this.draggedMatchstick.glowColor;
+                    ctx.beginPath();
+                    ctx.arc(x, y - 27, 15, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.restore();
+                }
+            },
+
             renderDarkOverlay() {
                 const ctx = this.ctx;
-                ctx.fillStyle = 'rgba(0, 0, 0, 0.20)';
+                ctx.fillStyle = 'rgba(0, 0, 0, 0.40)';
                 ctx.fillRect(0, 0, this.width, this.height);
             },
 
@@ -665,7 +919,7 @@
                 this.renderCarouselShadows(lantern, wallX);
 
                 // Lantern
-                this.renderCandle(lantern.x, lantern.y + lantern.height, lantern.glowColor);
+                this.renderCandle(lantern.x, lantern.y + lantern.height, lantern.glowColor, lantern.flameColor);
                 this.renderCarouselLantern(lantern);
 
                 this.ctx.restore();
