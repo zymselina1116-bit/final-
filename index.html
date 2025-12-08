@@ -423,9 +423,8 @@
 
                 // Check if movement is more horizontal (rotate) or general (move)
                 if (Math.abs(deltaX) > Math.abs(deltaY) * 2 && this.dragMode === 'rotate') {
-                    // Horizontal drag = rotation
+                    // Horizontal drag = rotation (immediate, no momentum)
                     this.activeLantern.rotation += deltaX * 0.02;
-                    this.activeLantern.rotationSpeed = deltaX * 0.02;
                 } else {
                     // Free movement in all directions with table constraints
                     const newX = this.activeLantern.x + deltaX;
@@ -440,6 +439,10 @@
             },
 
             handleMouseUp() {
+                // Stop rotation immediately (no momentum)
+                if (this.activeLantern) {
+                    this.activeLantern.rotationSpeed = 0;
+                }
                 this.isDragging = false;
                 this.dragMode = null;
                 this.activeLantern = null;
@@ -658,8 +661,21 @@
 
                 // Tint colors based on flame color (subtle 15% blend)
                 const flameColor = lantern.flameColor || '#FFD700';
+                const glowColor = lantern.glowColor || '#FFFAED';
                 const tintedGold = this.blendColors(this.colors.lanternGold, flameColor, 0.15);
                 const tintedHighlight = this.blendColors('#FFFFC8', flameColor, 0.2);
+
+                // Add illumination from flame on nearby surfaces
+                const pulse = Math.sin(this.time * 4) * 0.06 + 0.94;
+                ctx.save();
+                ctx.globalAlpha = 0.3 * pulse;
+                ctx.filter = 'blur(25px)';
+                const illumination = ctx.createRadialGradient(x, y + lantern.height, 0, x, y + lantern.height, 90);
+                illumination.addColorStop(0, glowColor);
+                illumination.addColorStop(1, 'rgba(255, 220, 83, 0)');
+                ctx.fillStyle = illumination;
+                ctx.fillRect(x - 90, y - 20, 180, 180);
+                ctx.restore();
 
                 // Increased sizes
                 const ringRadius = 70; // Increased from 50
@@ -773,40 +789,97 @@
 
             renderCandle(x, y, glowColor, flameColor) {
                 const ctx = this.ctx;
-                const pulse = Math.sin(this.time * 4) * 0.08 + 0.92;
+                const pulse = Math.sin(this.time * 4) * 0.06 + 0.94;
+                const flicker = Math.sin(this.time * 6) * 0.03;
 
                 flameColor = flameColor || '#FFD700';
 
-                // Candle glow
+                // Radial glow (point light source - larger and more prominent)
                 ctx.save();
-                ctx.globalAlpha = 0.35 * pulse;
-                ctx.filter = 'blur(30px)';
-                const gradient = ctx.createRadialGradient(x, y, 0, x, y, 70);
-                gradient.addColorStop(0, glowColor);
-                gradient.addColorStop(1, 'rgba(255, 220, 83, 0)');
-                ctx.fillStyle = gradient;
-                ctx.fillRect(x - 70, y - 70, 140, 140);
+                ctx.globalAlpha = 0.5 * pulse;
+                ctx.filter = 'blur(45px)';
+                const outerGlow = ctx.createRadialGradient(x, y - 10, 0, x, y - 10, 120);
+                outerGlow.addColorStop(0, glowColor);
+                outerGlow.addColorStop(0.5, glowColor.replace(')', ', 0.3)').replace('rgb', 'rgba'));
+                outerGlow.addColorStop(1, 'rgba(255, 220, 83, 0)');
+                ctx.fillStyle = outerGlow;
+                ctx.fillRect(x - 120, y - 130, 240, 240);
                 ctx.restore();
 
-                // Candle body
-                ctx.fillStyle = '#E8D5B7';
-                ctx.fillRect(x - 4, y - 5, 8, 15);
+                // Inner bright glow
+                ctx.save();
+                ctx.globalAlpha = 0.7 * pulse;
+                ctx.filter = 'blur(20px)';
+                const innerGlow = ctx.createRadialGradient(x, y - 10, 0, x, y - 10, 50);
+                innerGlow.addColorStop(0, flameColor);
+                innerGlow.addColorStop(1, 'rgba(255, 220, 83, 0)');
+                ctx.fillStyle = innerGlow;
+                ctx.fillRect(x - 50, y - 60, 100, 100);
+                ctx.restore();
 
-                // Candle shadow
-                ctx.fillStyle = 'rgba(150, 130, 100, 0.3)';
-                ctx.fillRect(x - 3, y - 5, 1, 15);
+                // Diptyque-style candle body (cylindrical)
+                const candleWidth = 10;
+                const candleHeight = 18;
 
-                // Flame
+                // Shadow on candle
+                ctx.fillStyle = 'rgba(150, 130, 100, 0.25)';
+                ctx.fillRect(x + candleWidth/2 - 1, y - 5, 2, candleHeight);
+
+                // Main candle body (light beige)
+                const candleGradient = ctx.createLinearGradient(x - candleWidth/2, 0, x + candleWidth/2, 0);
+                candleGradient.addColorStop(0, '#D8CDB5');
+                candleGradient.addColorStop(0.5, '#E8D5B7');
+                candleGradient.addColorStop(1, '#D0C5AD');
+                ctx.fillStyle = candleGradient;
+                ctx.fillRect(x - candleWidth/2, y - 5, candleWidth, candleHeight);
+
+                // Top rim of candle
+                ctx.fillStyle = '#C8BFB0';
+                ctx.fillRect(x - candleWidth/2, y - 6, candleWidth, 1);
+
+                // Wick
+                ctx.strokeStyle = '#2C2C2C';
+                ctx.lineWidth = 0.8;
+                ctx.beginPath();
+                ctx.moveTo(x, y - 6);
+                ctx.lineTo(x, y - 12);
+                ctx.stroke();
+
+                // Realistic flame shape (teardrop)
+                ctx.save();
+                ctx.translate(x + flicker * 2, y - 12);
+
+                // Outer flame glow
+                ctx.globalAlpha = 0.4;
                 ctx.fillStyle = flameColor;
                 ctx.beginPath();
-                ctx.ellipse(x, y - 8, 3, 5 * pulse, 0, 0, Math.PI * 2);
+                ctx.moveTo(0, 0);
+                ctx.bezierCurveTo(-4, -3, -4, -8, 0, -12 * pulse);
+                ctx.bezierCurveTo(4, -8, 4, -3, 0, 0);
+                ctx.closePath();
                 ctx.fill();
 
-                // Flame highlight (lighter version)
-                ctx.fillStyle = 'rgba(255, 255, 255, 0.6)';
+                // Main flame body
+                ctx.globalAlpha = 0.9;
+                ctx.fillStyle = flameColor;
                 ctx.beginPath();
-                ctx.ellipse(x - 1, y - 9, 1.5, 2.5 * pulse, 0, 0, Math.PI * 2);
+                ctx.moveTo(0, 0);
+                ctx.bezierCurveTo(-3, -2, -3, -6, 0, -10 * pulse);
+                ctx.bezierCurveTo(3, -6, 3, -2, 0, 0);
+                ctx.closePath();
                 ctx.fill();
+
+                // Inner bright core
+                ctx.globalAlpha = 1;
+                ctx.fillStyle = '#FFFAF0';
+                ctx.beginPath();
+                ctx.moveTo(0, -1);
+                ctx.bezierCurveTo(-1.5, -2, -1.5, -4, 0, -6 * pulse);
+                ctx.bezierCurveTo(1.5, -4, 1.5, -2, 0, -1);
+                ctx.closePath();
+                ctx.fill();
+
+                ctx.restore();
             },
 
             renderGlowingDot() {
@@ -844,23 +917,33 @@
                     const x = matchstick.x;
                     const y = matchstick.y;
 
-                    // Matchstick stick (wooden part)
-                    ctx.fillStyle = '#D2A679';
-                    ctx.fillRect(x - 2, y - 25, 4, 40);
+                    // Matchstick stick (elegant wooden part)
+                    const woodGradient = ctx.createLinearGradient(x - 2, 0, x + 2, 0);
+                    woodGradient.addColorStop(0, '#C09A6B');
+                    woodGradient.addColorStop(0.5, '#D2A679');
+                    woodGradient.addColorStop(1, '#B8936D');
+                    ctx.fillStyle = woodGradient;
+                    ctx.fillRect(x - 1.5, y - 22, 3, 35);
 
-                    // Matchstick head (colored)
+                    // Matchstick head (colored tip with shading)
                     ctx.fillStyle = matchstick.flameColor;
                     ctx.beginPath();
-                    ctx.arc(x, y - 27, 5, 0, Math.PI * 2);
+                    ctx.ellipse(x, y - 24, 4, 5, 0, 0, Math.PI * 2);
+                    ctx.fill();
+
+                    // Highlight on tip
+                    ctx.fillStyle = 'rgba(255, 255, 255, 0.25)';
+                    ctx.beginPath();
+                    ctx.ellipse(x - 1.5, y - 25, 1.5, 2, 0, 0, Math.PI * 2);
                     ctx.fill();
 
                     // Subtle glow
                     ctx.save();
-                    ctx.globalAlpha = 0.3;
-                    ctx.filter = 'blur(8px)';
+                    ctx.globalAlpha = 0.25;
+                    ctx.filter = 'blur(6px)';
                     ctx.fillStyle = matchstick.glowColor;
                     ctx.beginPath();
-                    ctx.arc(x, y - 27, 10, 0, Math.PI * 2);
+                    ctx.arc(x, y - 24, 8, 0, Math.PI * 2);
                     ctx.fill();
                     ctx.restore();
                 }
@@ -872,31 +955,41 @@
                     const x = mouseX - this.matchstickDragOffset.x;
                     const y = mouseY - this.matchstickDragOffset.y;
 
+                    // Enhanced glow when dragging
+                    ctx.save();
+                    ctx.globalAlpha = 0.6;
+                    ctx.filter = 'blur(20px)';
+                    ctx.fillStyle = this.draggedMatchstick.glowColor;
+                    ctx.beginPath();
+                    ctx.arc(x, y - 24, 20, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.restore();
+
                     // Matchstick stick
-                    ctx.fillStyle = '#D2A679';
-                    ctx.fillRect(x - 2, y - 25, 4, 40);
+                    const woodGradient = ctx.createLinearGradient(x - 2, 0, x + 2, 0);
+                    woodGradient.addColorStop(0, '#C09A6B');
+                    woodGradient.addColorStop(0.5, '#D2A679');
+                    woodGradient.addColorStop(1, '#B8936D');
+                    ctx.fillStyle = woodGradient;
+                    ctx.fillRect(x - 1.5, y - 22, 3, 35);
 
                     // Matchstick head
                     ctx.fillStyle = this.draggedMatchstick.flameColor;
                     ctx.beginPath();
-                    ctx.arc(x, y - 27, 5, 0, Math.PI * 2);
+                    ctx.ellipse(x, y - 24, 4, 5, 0, 0, Math.PI * 2);
                     ctx.fill();
 
-                    // Enhanced glow when dragging
-                    ctx.save();
-                    ctx.globalAlpha = 0.5;
-                    ctx.filter = 'blur(15px)';
-                    ctx.fillStyle = this.draggedMatchstick.glowColor;
+                    // Highlight on tip
+                    ctx.fillStyle = 'rgba(255, 255, 255, 0.4)';
                     ctx.beginPath();
-                    ctx.arc(x, y - 27, 15, 0, Math.PI * 2);
+                    ctx.ellipse(x - 1.5, y - 25, 1.5, 2, 0, 0, Math.PI * 2);
                     ctx.fill();
-                    ctx.restore();
                 }
             },
 
             renderDarkOverlay() {
                 const ctx = this.ctx;
-                ctx.fillStyle = 'rgba(0, 0, 0, 0.40)';
+                ctx.fillStyle = 'rgba(0, 0, 0, 0.50)';
                 ctx.fillRect(0, 0, this.width, this.height);
             },
 
@@ -932,10 +1025,7 @@
             },
 
             updatePhysics() {
-                for (let lantern of this.lanterns) {
-                    lantern.rotation += lantern.rotationSpeed;
-                    lantern.rotationSpeed *= 0.94;
-                }
+                // No physics - rotation controlled directly by user drag only
             }
         };
 
