@@ -95,7 +95,9 @@
             // Interaction
             isDragging: false,
             isRotating: false,
+            dragMode: null, // 'rotate' or 'move'
             lastMouseX: 0,
+            lastMouseY: 0,
 
             // Animation
             time: 0,
@@ -106,6 +108,19 @@
                 table: '#B5AB9C',
                 tableDark: '#9A907F',
                 lanternGold: '#FFDC53'
+            },
+
+            // Perspective tabletop polygon
+            getTablePolygon() {
+                // Trapezoid with perspective: wider at front (bottom), narrower at back
+                const w = this.width;
+                const h = this.height;
+                return [
+                    { x: w * 0.05, y: h * 0.62 },  // Top-left (back-left)
+                    { x: w * 0.35, y: h * 0.62 },  // Top-right (back-right)
+                    { x: w * 0.45, y: h * 0.95 },  // Bottom-right (front-right)
+                    { x: 0, y: h * 0.95 }           // Bottom-left (front-left)
+                ];
             },
 
             init() {
@@ -165,9 +180,10 @@
                 const x = e.clientX - rect.left;
                 const y = e.clientY - rect.top;
 
-                // Check glowing dot (add button)
-                const dotX = this.width * 0.12;
-                const dotY = this.height * 0.75;
+                // Check glowing dot (add button) - position on table
+                const polygon = this.getTablePolygon();
+                const dotX = polygon[3].x + (polygon[2].x - polygon[3].x) * 0.15;
+                const dotY = polygon[3].y - 40;
                 const dist = Math.sqrt((x - dotX) ** 2 + (y - dotY) ** 2);
 
                 if (dist < 20) {
@@ -175,13 +191,33 @@
                     return;
                 }
 
-                // Check lanterns
+                // Check lanterns - determine if clicking base (move) or top (rotate)
                 for (let lantern of this.lanterns) {
-                    const lDist = Math.sqrt((x - lantern.x) ** 2 + (y - lantern.y) ** 2);
-                    if (lDist < 80) {
+                    const baseY = lantern.y + lantern.height;
+                    const topY = lantern.y;
+
+                    // Check if clicking on base area (bottom third)
+                    const baseDistY = Math.abs(y - baseY);
+                    const baseDistX = Math.abs(x - lantern.x);
+
+                    if (baseDistX < 40 && baseDistY < 40 && y > topY + lantern.height * 0.6) {
+                        // Clicking base - enable repositioning
                         this.activeLantern = lantern;
                         this.isDragging = true;
+                        this.dragMode = 'move';
                         this.lastMouseX = x;
+                        this.lastMouseY = y;
+                        return;
+                    }
+
+                    // Check if clicking on top carousel area (for rotation)
+                    const topDist = Math.sqrt((x - lantern.x) ** 2 + (y - lantern.y) ** 2);
+                    if (topDist < 80) {
+                        this.activeLantern = lantern;
+                        this.isDragging = true;
+                        this.dragMode = 'rotate';
+                        this.lastMouseX = x;
+                        this.lastMouseY = y;
                         return;
                     }
                 }
@@ -192,28 +228,26 @@
 
                 const rect = this.canvas.getBoundingClientRect();
                 const x = e.clientX - rect.left;
+                const y = e.clientY - rect.top;
                 const deltaX = x - this.lastMouseX;
 
-                // Determine if rotating or repositioning
-                if (Math.abs(deltaX) > 2) {
-                    this.isRotating = true;
-                }
-
-                if (this.isRotating) {
-                    // Rotate lantern
+                if (this.dragMode === 'rotate') {
+                    // Rotate lantern (position stays fixed)
                     this.activeLantern.rotation += deltaX * 0.02;
                     this.activeLantern.rotationSpeed = deltaX * 0.02;
-                } else {
-                    // Reposition lantern
+                } else if (this.dragMode === 'move') {
+                    // Reposition lantern (only horizontal movement)
                     this.activeLantern.x = x;
                 }
 
                 this.lastMouseX = x;
+                this.lastMouseY = y;
             },
 
             handleMouseUp() {
                 this.isDragging = false;
                 this.isRotating = false;
+                this.dragMode = null;
                 this.activeLantern = null;
             },
 
@@ -245,17 +279,26 @@
                 const sCtx = silhouetteCanvas.getContext('2d');
                 sCtx.drawImage(this.drawingCanvas, 0, 0);
 
-                // Create lantern
-                const tableY = this.height * 0.65;
-                const randomHeight = -80 + Math.random() * 40;
+                // Create lantern on perspective table
+                const polygon = this.getTablePolygon();
+
+                // Random position within table polygon (20-80% from left edge)
+                const t = 0.2 + Math.random() * 0.6;
+                const topEdgeX = polygon[0].x + (polygon[1].x - polygon[0].x) * t;
+                const bottomEdgeX = polygon[3].x + (polygon[2].x - polygon[3].x) * t;
+
+                // Random depth on table (30-70% from back to front)
+                const depth = 0.3 + Math.random() * 0.4;
+                const lanternX = topEdgeX + (bottomEdgeX - topEdgeX) * depth;
+                const lanternY = polygon[0].y + (polygon[3].y - polygon[0].y) * depth;
 
                 this.lanterns.push({
-                    x: this.width * 0.15 + Math.random() * (this.width * 0.2),
-                    y: tableY + randomHeight,
+                    x: lanternX,
+                    y: lanternY - 60, // Offset up so base sits on table
                     rotation: 0,
                     rotationSpeed: 0,
                     silhouette: silhouetteCanvas,
-                    height: 120 + Math.random() * 40
+                    height: 100 + Math.random() * 50
                 });
 
                 // Close drawing interface
@@ -287,52 +330,67 @@
 
             renderRoom() {
                 const ctx = this.ctx;
-                const splitX = this.width * 0.5;
 
-                // Wall (right side) - flat color
+                // Wall (entire background) - flat beige color
                 ctx.fillStyle = this.colors.wall;
-                ctx.fillRect(splitX, 0, this.width - splitX, this.height);
+                ctx.fillRect(0, 0, this.width, this.height);
 
-                // Table (left side) - 3D plane feeling with depth gradient
-                const tableTop = this.height * 0.65;
+                // Perspective tabletop polygon
+                const polygon = this.getTablePolygon();
 
-                // Main table gradient (darker at bottom, lighter at top/edge)
-                const tableGradient = ctx.createLinearGradient(0, tableTop, 0, this.height);
-                tableGradient.addColorStop(0, '#C8BFB0'); // Lighter at edge
-                tableGradient.addColorStop(0.3, this.colors.table);
-                tableGradient.addColorStop(1, '#8A8070'); // Darker at bottom
+                // Main table with gradient (darker at front/bottom, lighter at back)
+                ctx.save();
+                ctx.beginPath();
+                ctx.moveTo(polygon[0].x, polygon[0].y);
+                for (let i = 1; i < polygon.length; i++) {
+                    ctx.lineTo(polygon[i].x, polygon[i].y);
+                }
+                ctx.closePath();
+
+                // Vertical gradient for depth
+                const tableGradient = ctx.createLinearGradient(
+                    0, polygon[0].y,
+                    0, polygon[3].y
+                );
+                tableGradient.addColorStop(0, '#C8BFB0'); // Lighter at back
+                tableGradient.addColorStop(0.4, this.colors.table);
+                tableGradient.addColorStop(1, '#7A7060'); // Darker at front
 
                 ctx.fillStyle = tableGradient;
-                ctx.fillRect(0, tableTop, splitX, this.height - tableTop);
+                ctx.fill();
 
-                // Horizontal highlight near table edge (light grazing effect)
-                const edgeGradient = ctx.createLinearGradient(0, tableTop, 0, tableTop + 30);
-                edgeGradient.addColorStop(0, 'rgba(255, 252, 241, 0.25)');
-                edgeGradient.addColorStop(1, 'rgba(255, 252, 241, 0)');
-                ctx.fillStyle = edgeGradient;
-                ctx.fillRect(0, tableTop, splitX, 30);
+                // Edge highlight along the top edge
+                ctx.strokeStyle = 'rgba(255, 252, 241, 0.3)';
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                ctx.moveTo(polygon[0].x, polygon[0].y);
+                ctx.lineTo(polygon[1].x, polygon[1].y);
+                ctx.stroke();
 
-                // Soft vignette at left and right edges for depth
-                const leftVignette = ctx.createLinearGradient(0, tableTop, 100, tableTop);
-                leftVignette.addColorStop(0, 'rgba(0, 0, 0, 0.15)');
-                leftVignette.addColorStop(1, 'rgba(0, 0, 0, 0)');
-                ctx.fillStyle = leftVignette;
-                ctx.fillRect(0, tableTop, 100, this.height - tableTop);
+                // Soft shadow along left edge for depth
+                const leftEdgeGradient = ctx.createLinearGradient(
+                    polygon[0].x, 0,
+                    polygon[0].x + 60, 0
+                );
+                leftEdgeGradient.addColorStop(0, 'rgba(0, 0, 0, 0.2)');
+                leftEdgeGradient.addColorStop(1, 'rgba(0, 0, 0, 0)');
 
-                const rightVignette = ctx.createLinearGradient(splitX - 100, tableTop, splitX, tableTop);
-                rightVignette.addColorStop(0, 'rgba(0, 0, 0, 0)');
-                rightVignette.addColorStop(1, 'rgba(0, 0, 0, 0.15)');
-                ctx.fillStyle = rightVignette;
-                ctx.fillRect(splitX - 100, tableTop, 100, this.height - tableTop);
+                ctx.beginPath();
+                ctx.moveTo(polygon[0].x, polygon[0].y);
+                ctx.lineTo(polygon[3].x, polygon[3].y);
+                ctx.lineTo(polygon[3].x + 60, polygon[3].y);
+                ctx.lineTo(polygon[0].x + 60, polygon[0].y);
+                ctx.closePath();
+                ctx.fillStyle = leftEdgeGradient;
+                ctx.fill();
 
-                // Floor/background above table
-                ctx.fillStyle = '#A8A199';
-                ctx.fillRect(0, 0, splitX, tableTop);
+                ctx.restore();
             },
 
             renderShadows() {
                 const ctx = this.ctx;
-                const wallX = this.width * 0.52;
+                // Wall starts where table ends (right side)
+                const wallX = this.width * 0.5;
 
                 // Render all shadows with overlap
                 for (let lantern of this.lanterns) {
@@ -353,31 +411,47 @@
                 // Shadow scale (1.8x to 2.2x)
                 const shadowScale = 2.0;
 
-                // Render darker shadow with directional stretch
+                // Use multiply blend mode for darker overlapping shadows
                 ctx.save();
+                ctx.globalCompositeOperation = 'multiply';
 
-                // Double-layer shadow for depth and darkness
-                // Layer 1: Sharp center (darker)
-                ctx.globalAlpha = 0.5;
-                ctx.filter = 'blur(60px)';
+                // Layer 1: Sharp center (very dark)
+                ctx.globalAlpha = 0.85;
+                ctx.filter = 'blur(50px)';
 
                 ctx.translate(shadowX, shadowY);
                 ctx.rotate(lantern.rotation);
-                ctx.scale(shadowScale * 0.32, shadowScale * 0.28); // Slight horizontal stretch
+                ctx.scale(shadowScale * 0.32, shadowScale * 0.28);
                 ctx.translate(-150, -150);
 
                 ctx.drawImage(lantern.silhouette, 0, 0);
 
                 ctx.restore();
 
-                // Layer 2: Soft outer glow (lighter, more diffused)
+                // Layer 2: Medium blur
                 ctx.save();
-                ctx.globalAlpha = 0.25;
-                ctx.filter = 'blur(100px)';
+                ctx.globalCompositeOperation = 'multiply';
+                ctx.globalAlpha = 0.7;
+                ctx.filter = 'blur(80px)';
 
                 ctx.translate(shadowX, shadowY);
                 ctx.rotate(lantern.rotation);
-                ctx.scale(shadowScale * 0.35, shadowScale * 0.3);
+                ctx.scale(shadowScale * 0.34, shadowScale * 0.29);
+                ctx.translate(-150, -150);
+
+                ctx.drawImage(lantern.silhouette, 0, 0);
+
+                ctx.restore();
+
+                // Layer 3: Soft outer glow
+                ctx.save();
+                ctx.globalCompositeOperation = 'multiply';
+                ctx.globalAlpha = 0.5;
+                ctx.filter = 'blur(120px)';
+
+                ctx.translate(shadowX, shadowY);
+                ctx.rotate(lantern.rotation);
+                ctx.scale(shadowScale * 0.36, shadowScale * 0.3);
                 ctx.translate(-150, -150);
 
                 ctx.drawImage(lantern.silhouette, 0, 0);
@@ -503,8 +577,9 @@
 
             renderGlowingDot() {
                 const ctx = this.ctx;
-                const x = this.width * 0.12;
-                const y = this.height * 0.75;
+                const polygon = this.getTablePolygon();
+                const x = polygon[3].x + (polygon[2].x - polygon[3].x) * 0.15;
+                const y = polygon[3].y - 40;
 
                 // Pulsating halo
                 const pulse = Math.sin(this.time * 2) * 0.5 + 0.5;
