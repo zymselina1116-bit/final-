@@ -156,18 +156,21 @@
     <div id="canvas-container"></div>
 
     <div id="ui-overlay">
-        <div class="ui-panel">
-            <div class="ui-title">Add Objects</div>
-            <button class="button" onclick="app.addCarousel()">+ Carousel</button>
-            <button class="button" onclick="app.startDrawing()">+ Draw Panel</button>
+        <!-- Camera mode toggle -->
+        <div id="camera-toggle" style="position: absolute; top: 20px; right: 20px; cursor: pointer; background: rgba(255,255,255,0.9); padding: 12px; border-radius: 50%; width: 48px; height: 48px; display: flex; align-items: center; justify-content: center; box-shadow: 0 2px 12px rgba(0,0,0,0.15);">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                <circle cx="12" cy="12" r="3"></circle>
+            </svg>
         </div>
+    </div>
 
-        <div class="ui-panel">
-            <div class="ui-title">Add Spotlight</div>
-            <button class="button" onclick="app.addSpotlight()">+ New Light</button>
-            <div class="ui-title" style="margin-top: 15px;">Light Color</div>
-            <div class="color-grid" id="colorPalette"></div>
-        </div>
+    <!-- Choice Menu (appears when clicking glowing point) -->
+    <div id="choiceMenu" style="position: absolute; display: none; flex-direction: column; gap: 12px; padding: 20px; background: rgba(255,255,255,0.95); border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.2); z-index: 150;">
+        <div style="font-size: 14px; font-weight: 600; color: #333; margin-bottom: 8px; text-align: center;">Add Object</div>
+        <button class="choice-btn" onclick="app.createCarousel()" style="padding: 12px 24px; background: #2c2c2c; color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 13px; transition: all 0.2s;">Carousel</button>
+        <button class="choice-btn" onclick="app.createPanel()" style="padding: 12px 24px; background: #2c2c2c; color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 13px; transition: all 0.2s;">Panel</button>
+        <button class="choice-btn" onclick="app.createLight()" style="padding: 12px 24px; background: #2c2c2c; color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 13px; transition: all 0.2s;">Spotlight</button>
     </div>
 
     <div id="drawing-interface">
@@ -206,6 +209,12 @@
             lastMouseY: 0,
             cameraRotation: { theta: Math.PI / 4, phi: Math.PI / 6 },
             cameraDistance: 25,
+            cameraMode: 'editing', // 'editing' or 'immersive'
+            editingCameraState: null,
+
+            // Glowing point
+            glowingPoint: null,
+            glowingPointPosition: new THREE.Vector3(0, 0, 0),
 
             // Drawing
             drawingCanvas: null,
@@ -249,11 +258,14 @@
                 // Build room
                 this.createRoom();
 
-                // Setup color palette
-                this.createColorPalette();
+                // Create glowing point
+                this.createGlowingPoint();
 
                 // Event listeners
                 this.setupEventListeners();
+
+                // Camera toggle
+                document.getElementById('camera-toggle').addEventListener('click', () => this.toggleCameraMode());
 
                 // Start animation
                 this.animate();
@@ -319,21 +331,87 @@
                 ceiling.rotation.x = Math.PI / 2;
                 this.scene.add(ceiling);
 
-                // Ambient light (slightly brighter so room is visible)
-                const ambientLight = new THREE.AmbientLight(0x808080, 0.4);
+                // Ambient light (very dim for gallery atmosphere)
+                const ambientLight = new THREE.AmbientLight(0xffffff, 0.25);
                 this.scene.add(ambientLight);
 
-                // Add a default spotlight so room is visible on load
+                // Add a default white spotlight
                 const defaultSpotlight = this.createSpotlight();
-                defaultSpotlight.position.set(0, 0, 5);
+                defaultSpotlight.position.set(-3, 0, 6);
                 this.scene.add(defaultSpotlight);
                 this.spotlights.push(defaultSpotlight);
             },
 
-            addCarousel() {
-                // Enter drawing mode for carousel
+            createGlowingPoint() {
+                // Pulsing white glowing point on floor
+                const geometry = new THREE.SphereGeometry(0.15, 32, 32);
+                const material = new THREE.MeshStandardMaterial({
+                    color: 0xffffff,
+                    emissive: 0xffffff,
+                    emissiveIntensity: 1,
+                    metalness: 0,
+                    roughness: 0.2
+                });
+                this.glowingPoint = new THREE.Mesh(geometry, material);
+                this.glowingPoint.position.set(0, 0.15, 0);
+                this.glowingPoint.userData.type = 'glowingPoint';
+                this.scene.add(this.glowingPoint);
+
+                // Add glow effect
+                const glowGeometry = new THREE.SphereGeometry(0.3, 32, 32);
+                const glowMaterial = new THREE.MeshBasicMaterial({
+                    color: 0xffffff,
+                    transparent: true,
+                    opacity: 0.3
+                });
+                const glow = new THREE.Mesh(glowGeometry, glowMaterial);
+                this.glowingPoint.add(glow);
+            },
+
+            toggleCameraMode() {
+                if (this.cameraMode === 'editing') {
+                    // Save editing camera state
+                    this.editingCameraState = {
+                        theta: this.cameraRotation.theta,
+                        phi: this.cameraRotation.phi,
+                        distance: this.cameraDistance
+                    };
+
+                    // Switch to immersive mode (human height in center)
+                    this.cameraMode = 'immersive';
+                    this.camera.position.set(0, 1.6, 0); // Eye level
+                    this.cameraRotation.theta = 0;
+                    this.cameraRotation.phi = Math.PI / 2;
+                } else {
+                    // Restore editing mode
+                    this.cameraMode = 'editing';
+                    if (this.editingCameraState) {
+                        this.cameraRotation.theta = this.editingCameraState.theta;
+                        this.cameraRotation.phi = this.editingCameraState.phi;
+                        this.cameraDistance = this.editingCameraState.distance;
+                    }
+                    this.updateCameraPosition();
+                }
+            },
+
+            createCarousel() {
+                document.getElementById('choiceMenu').style.display = 'none';
                 this.placementMode = 'carousel';
                 this.startDrawing();
+            },
+
+            createPanel() {
+                document.getElementById('choiceMenu').style.display = 'none';
+                this.placementMode = 'panel';
+                this.startDrawing();
+            },
+
+            createLight() {
+                document.getElementById('choiceMenu').style.display = 'none';
+                const spotlight = this.createSpotlight();
+                spotlight.position.copy(this.glowingPointPosition);
+                this.scene.add(spotlight);
+                this.spotlights.push(spotlight);
             },
 
             createCarouselFromDrawing() {
@@ -362,19 +440,19 @@
                 group.userData.rotation = 0;
                 group.userData.angularVelocity = 0;
 
-                // Base
+                // Base (metallic silver)
                 const baseGeometry = new THREE.CylinderGeometry(0.4, 0.4, 0.1, 32);
                 const baseMaterial = new THREE.MeshStandardMaterial({
-                    color: 0x2c2c2c,
-                    metalness: 0.3,
-                    roughness: 0.7
+                    color: 0xc0c0c0,
+                    metalness: 0.9,
+                    roughness: 0.2
                 });
                 const base = new THREE.Mesh(baseGeometry, baseMaterial);
                 base.position.y = 0.05;
                 base.castShadow = true;
                 group.add(base);
 
-                // Central axis
+                // Central axis (metallic silver)
                 const axisGeometry = new THREE.CylinderGeometry(0.03, 0.03, 2.5, 16);
                 const axis = new THREE.Mesh(axisGeometry, baseMaterial);
                 axis.position.y = 1.25;
@@ -417,26 +495,18 @@
                 return group;
             },
 
-            addSpotlight() {
-                const spotlight = this.createSpotlight();
-                spotlight.position.set(
-                    (Math.random() - 0.5) * 10,
-                    0,
-                    (Math.random() - 0.5) * 10
-                );
-                this.scene.add(spotlight);
-                this.spotlights.push(spotlight);
-            },
-
             createSpotlight() {
                 const group = new THREE.Group();
                 group.userData.type = 'spotlight';
                 group.userData.angle = Math.PI / 6;
-                group.userData.color = this.currentLightColor;
 
-                // Base stand
+                // Base stand (dark metal)
                 const baseGeometry = new THREE.CylinderGeometry(0.15, 0.15, 0.05, 16);
-                const baseMaterial = new THREE.MeshStandardMaterial({ color: 0x2c2c2c });
+                const baseMaterial = new THREE.MeshStandardMaterial({
+                    color: 0x1a1a1a,
+                    metalness: 0.5,
+                    roughness: 0.5
+                });
                 const base = new THREE.Mesh(baseGeometry, baseMaterial);
                 base.position.y = 0.025;
                 group.add(base);
@@ -449,22 +519,20 @@
                 group.add(fixture);
                 group.userData.fixture = fixture;
 
-                // Actual light
-                const color = new THREE.Color(this.currentLightColor);
-                const light = new THREE.SpotLight(color, 2, 30, Math.PI / 6, 0.5, 2);
+                // Pure WHITE spotlight (no colors)
+                const light = new THREE.SpotLight(0xffffff, 3, 40, Math.PI / 5, 0.8, 2);
                 light.position.set(0, 0.4, 0);
                 light.target.position.set(0, 0, -5);
                 light.castShadow = true;
                 light.shadow.mapSize.width = 2048;
                 light.shadow.mapSize.height = 2048;
+                light.shadow.bias = -0.0001;
                 group.add(light);
                 group.add(light.target);
                 group.userData.light = light;
 
-                // Helper (visible beam indicator)
-                const helper = new THREE.SpotLightHelper(light);
-                this.scene.add(helper);
-                group.userData.helper = helper;
+                // NO helper - no visible rays
+                group.userData.helper = null;
 
                 return group;
             },
@@ -631,6 +699,20 @@
                 const raycaster = new THREE.Raycaster();
                 raycaster.setFromCamera(mouse, this.camera);
 
+                // Check for glowing point click
+                if (this.glowingPoint) {
+                    const glowIntersects = raycaster.intersectObject(this.glowingPoint, true);
+                    if (glowIntersects.length > 0) {
+                        // Show choice menu
+                        const menu = document.getElementById('choiceMenu');
+                        menu.style.display = 'flex';
+                        menu.style.left = e.clientX + 'px';
+                        menu.style.top = e.clientY + 'px';
+                        this.glowingPointPosition.copy(this.glowingPoint.position);
+                        return;
+                    }
+                }
+
                 // Check for object selection
                 const allObjects = [...this.carousels, ...this.panels, ...this.spotlights];
                 const intersects = raycaster.intersectObjects(
@@ -648,7 +730,7 @@
                     if (parent.userData.type === 'spotlight') {
                         this.selectedLight = parent;
                         this.selectedObject = null;
-                    } else {
+                    } else if (parent.userData.type !== 'glowingPoint') {
                         this.selectedObject = parent;
                         this.selectedLight = null;
                     }
@@ -713,15 +795,25 @@
             },
 
             updateCameraPosition() {
-                const theta = this.cameraRotation.theta;
-                const phi = this.cameraRotation.phi;
-                const radius = this.cameraDistance;
+                if (this.cameraMode === 'immersive') {
+                    // Immersive mode - look around from center
+                    const lookDistance = 5;
+                    const lookX = Math.cos(this.cameraRotation.theta) * Math.sin(this.cameraRotation.phi) * lookDistance;
+                    const lookY = Math.cos(this.cameraRotation.phi) * lookDistance;
+                    const lookZ = Math.sin(this.cameraRotation.theta) * Math.sin(this.cameraRotation.phi) * lookDistance;
+                    this.camera.lookAt(lookX, lookY + 1.6, lookZ);
+                } else {
+                    // Editing mode - orbit camera
+                    const theta = this.cameraRotation.theta;
+                    const phi = this.cameraRotation.phi;
+                    const radius = this.cameraDistance;
 
-                this.camera.position.x = radius * Math.sin(phi) * Math.cos(theta);
-                this.camera.position.y = radius * Math.cos(phi);
-                this.camera.position.z = radius * Math.sin(phi) * Math.sin(theta);
+                    this.camera.position.x = radius * Math.sin(phi) * Math.cos(theta);
+                    this.camera.position.y = radius * Math.cos(phi);
+                    this.camera.position.z = radius * Math.sin(phi) * Math.sin(theta);
 
-                this.camera.lookAt(0, 2, 0);
+                    this.camera.lookAt(0, 2, 0);
+                }
             },
 
             onResize() {
@@ -733,12 +825,14 @@
             animate() {
                 requestAnimationFrame(() => this.animate());
 
-                // Update spotlight helpers
-                this.spotlights.forEach(spotlight => {
-                    if (spotlight.userData.helper) {
-                        spotlight.userData.helper.update();
-                    }
-                });
+                const time = Date.now() * 0.001;
+
+                // Pulsing glow on glowing point
+                if (this.glowingPoint) {
+                    const pulse = Math.sin(time * 2) * 0.3 + 0.7;
+                    this.glowingPoint.material.emissiveIntensity = pulse * 1.2;
+                    this.glowingPoint.scale.set(pulse, pulse, pulse);
+                }
 
                 // Update carousel rotations with friction
                 this.carousels.forEach(carousel => {
