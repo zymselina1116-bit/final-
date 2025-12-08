@@ -156,11 +156,11 @@
             drawingCtx: null,
             isDrawing: false,
             drawingPoints: [],
-            currentSilhouette: null,
 
             // Lanterns
             lanterns: [],
             activeLantern: null,
+            focusedLantern: null,
             pendingLanternType: null,
 
             // Interaction
@@ -181,10 +181,10 @@
             },
 
             lanternColors: {
-                'warm-white': { glow: '#FFFAED', shadow: '#000000' },
-                'soft-yellow': { glow: '#FFE680', shadow: '#000000' },
-                'soft-pink': { glow: '#FFB3D9', shadow: '#2B0015' },
-                'soft-blue': { glow: '#B3D9FF', shadow: '#001529' }
+                'warm-white': { glow: '#FFFAED', name: 'Warm White' },
+                'soft-amber': { glow: '#FFD580', name: 'Soft Amber' },
+                'pale-pink': { glow: '#FFB3D9', name: 'Pale Pink' },
+                'pale-blue': { glow: '#B3D9FF', name: 'Pale Blue' }
             },
 
             getTablePolygon() {
@@ -223,6 +223,7 @@
                 this.canvas.addEventListener('mousedown', (e) => this.handleMouseDown(e));
                 this.canvas.addEventListener('mousemove', (e) => this.handleMouseMove(e));
                 this.canvas.addEventListener('mouseup', () => this.handleMouseUp());
+                this.canvas.addEventListener('dblclick', (e) => this.handleDoubleClick(e));
 
                 this.drawingCanvas.addEventListener('mousedown', (e) => {
                     this.isDrawing = true;
@@ -259,7 +260,7 @@
                 const dotY = polygon[3].y - 40;
                 const dist = Math.sqrt((x - dotX) ** 2 + (y - dotY) ** 2);
 
-                if (dist < 20) {
+                if (dist < 20 && !this.focusedLantern) {
                     this.showChoiceMenu(dotX, dotY - 100);
                     return;
                 }
@@ -270,7 +271,7 @@
                     if (lDist < 80) {
                         this.activeLantern = lantern;
                         this.isDragging = true;
-                        this.dragMode = lantern.type === 'carousel' ? 'rotate' : 'move';
+                        this.dragMode = 'rotate';
                         this.lastMouseX = x;
                         this.lastMouseY = y;
                         return;
@@ -287,11 +288,13 @@
                 const deltaX = x - this.lastMouseX;
                 const deltaY = y - this.lastMouseY;
 
-                if (this.dragMode === 'rotate' && this.activeLantern.type === 'carousel') {
+                // Check if movement is more horizontal (rotate) or general (move)
+                if (Math.abs(deltaX) > Math.abs(deltaY) * 2 && this.dragMode === 'rotate') {
+                    // Horizontal drag = rotation
                     this.activeLantern.rotation += deltaX * 0.02;
                     this.activeLantern.rotationSpeed = deltaX * 0.02;
                 } else {
-                    // Free movement
+                    // Free movement in all directions
                     this.activeLantern.x += deltaX;
                     this.activeLantern.y += deltaY;
                 }
@@ -306,13 +309,34 @@
                 this.activeLantern = null;
             },
 
+            handleDoubleClick(e) {
+                const rect = this.canvas.getBoundingClientRect();
+                const x = e.clientX - rect.left;
+                const y = e.clientY - rect.top;
+
+                if (this.focusedLantern) {
+                    // Zoom out
+                    this.focusedLantern = null;
+                    return;
+                }
+
+                // Check if double-clicking on a lantern
+                for (let lantern of this.lanterns) {
+                    const lDist = Math.sqrt((x - lantern.x) ** 2 + (y - lantern.y) ** 2);
+                    if (lDist < 80) {
+                        this.focusedLantern = lantern;
+                        return;
+                    }
+                }
+            },
+
             showChoiceMenu(x, y) {
                 const menu = document.getElementById('choiceMenu');
                 const content = document.getElementById('choiceContent');
 
                 content.innerHTML = `
                     <div class="choice-title">Choose Lantern Type</div>
-                    <button class="choice-button" onclick="app.chooseLanternType('carousel')">Carousel Lantern</button>
+                    <button class="choice-button" onclick="app.chooseLanternType('carousel')">Diptyque Carousel</button>
                     <button class="choice-button" onclick="app.chooseLanternType('hexagonal')">Hexagonal Lantern</button>
                 `;
 
@@ -337,9 +361,9 @@
                     <div class="choice-title">Choose Light Color</div>
                     <div class="color-grid">
                         <button class="color-choice" onclick="app.selectColor('warm-white')">Warm White</button>
-                        <button class="color-choice" onclick="app.selectColor('soft-yellow')">Soft Yellow</button>
-                        <button class="color-choice" onclick="app.selectColor('soft-pink')">Soft Pink</button>
-                        <button class="color-choice" onclick="app.selectColor('soft-blue')">Soft Blue</button>
+                        <button class="color-choice" onclick="app.selectColor('soft-amber')">Soft Amber</button>
+                        <button class="color-choice" onclick="app.selectColor('pale-pink')">Pale Pink</button>
+                        <button class="color-choice" onclick="app.selectColor('pale-blue')">Pale Blue</button>
                     </div>
                 `;
             },
@@ -397,8 +421,7 @@
                     silhouette: silhouetteCanvas,
                     height: 100,
                     color: this.pendingColor || 'warm-white',
-                    glowColor: colorData.glow,
-                    shadowColor: colorData.shadow
+                    glowColor: colorData.glow
                 });
 
                 document.getElementById('drawingInterface').classList.remove('active');
@@ -413,11 +436,15 @@
 
                 this.ctx.clearRect(0, 0, this.width, this.height);
 
-                this.renderRoom();
-                this.renderShadows();
-                this.renderLanterns();
-                this.renderGlowingDot();
-                this.renderDarkOverlay();
+                if (this.focusedLantern) {
+                    this.renderFocusedView();
+                } else {
+                    this.renderRoom();
+                    this.renderShadows();
+                    this.renderLanterns();
+                    this.renderGlowingDot();
+                    this.renderDarkOverlay();
+                }
 
                 this.updatePhysics();
 
@@ -466,40 +493,38 @@
                     if (lantern.type === 'carousel') {
                         this.renderCarouselShadows(lantern, wallX);
                     } else {
-                        this.renderHexagonalShadow(lantern, wallX);
+                        this.renderHexagonalShadows(lantern, wallX);
                     }
                 }
             },
 
             renderCarouselShadows(lantern, wallX) {
                 const ctx = this.ctx;
+                const candleX = lantern.x;
+                const candleY = lantern.y + lantern.height;
 
-                // Render individual charm shadows
+                // Render individual charm shadows (6-petal pattern)
                 for (let i = 0; i < 6; i++) {
                     const angle = lantern.rotation + (i / 6) * Math.PI * 2;
                     const charmX = lantern.x + Math.cos(angle) * 38;
-                    const charmY = lantern.y + Math.sin(angle) * 38 + 60;
+                    const charmY = lantern.y + Math.sin(angle) * 38 * 0.3 + 60;
 
-                    // Calculate shadow position
-                    const lightX = lantern.x;
-                    const lightY = lantern.y + lantern.height;
-
-                    const dx = charmX - lightX;
-                    const dy = charmY - lightY;
+                    const dx = charmX - candleX;
+                    const dy = charmY - candleY;
                     const dist = Math.sqrt(dx * dx + dy * dy);
 
-                    const shadowDist = 250;
+                    const shadowDist = 280;
                     const shadowX = wallX + (dx / dist) * shadowDist;
-                    const shadowY = this.height * 0.4 + (dy / dist) * shadowDist * 0.3;
+                    const shadowY = this.height * 0.4 + (dy / dist) * shadowDist * 0.4;
 
-                    // Crisp shadow with slight blur
+                    // Crisp shadow with reduced blur (10px)
                     ctx.save();
-                    ctx.globalAlpha = 0.4;
-                    ctx.filter = 'blur(8px)';
+                    ctx.globalAlpha = 0.45;
+                    ctx.filter = 'blur(10px)';
 
                     ctx.translate(shadowX, shadowY);
                     ctx.rotate(lantern.rotation + (i / 6) * Math.PI * 2);
-                    ctx.scale(0.15, 0.15);
+                    ctx.scale(0.18, 0.18);
                     ctx.translate(-150, -150);
 
                     ctx.drawImage(lantern.silhouette, 0, 0);
@@ -508,31 +533,54 @@
                 }
             },
 
-            renderHexagonalShadow(lantern, wallX) {
+            renderHexagonalShadows(lantern, wallX) {
                 const ctx = this.ctx;
+                const candleX = lantern.x;
+                const candleY = lantern.y + lantern.height;
 
-                const lightX = lantern.x;
-                const lightY = lantern.y + lantern.height;
+                // Render 6 individual face shadows
+                const size = 40;
+                const faceAngles = [
+                    { angle: 0, x: size * 0.5, y: 0 },
+                    { angle: Math.PI / 3, x: size * 0.5, y: size * 0.5 },
+                    { angle: 2 * Math.PI / 3, x: 0, y: size * 0.5 },
+                    { angle: Math.PI, x: -size * 0.5, y: size * 0.5 },
+                    { angle: 4 * Math.PI / 3, x: -size * 0.5, y: 0 },
+                    { angle: 5 * Math.PI / 3, x: 0, y: -size * 0.5 }
+                ];
 
-                const dx = wallX - lightX;
-                const shadowX = wallX + 150;
-                const shadowY = this.height * 0.4;
+                for (let i = 0; i < 6; i++) {
+                    const face = faceAngles[i];
+                    const faceX = lantern.x + face.x;
+                    const faceY = lantern.y + face.y;
 
-                ctx.save();
-                ctx.globalAlpha = 0.45;
-                ctx.filter = 'blur(10px)';
+                    const dx = faceX - candleX;
+                    const dy = faceY - candleY;
+                    const dist = Math.sqrt(dx * dx + dy * dy);
 
-                ctx.translate(shadowX, shadowY);
-                ctx.scale(0.5, 0.5);
-                ctx.translate(-150, -150);
+                    const shadowDist = 300;
+                    const shadowX = wallX + (dx / dist) * shadowDist;
+                    const shadowY = this.height * 0.4 + (dy / dist) * shadowDist * 0.4;
 
-                ctx.drawImage(lantern.silhouette, 0, 0);
+                    ctx.save();
+                    ctx.globalAlpha = 0.40;
+                    ctx.filter = 'blur(12px)';
 
-                ctx.restore();
+                    ctx.translate(shadowX, shadowY);
+                    ctx.rotate(lantern.rotation + face.angle);
+                    ctx.scale(0.25, 0.25);
+                    ctx.translate(-150, -150);
+
+                    ctx.drawImage(lantern.silhouette, 0, 0);
+
+                    ctx.restore();
+                }
             },
 
             renderLanterns() {
                 for (let lantern of this.lanterns) {
+                    this.renderCandle(lantern.x, lantern.y + lantern.height, lantern.glowColor);
+
                     if (lantern.type === 'carousel') {
                         this.renderCarouselLantern(lantern);
                     } else {
@@ -546,38 +594,75 @@
                 const x = lantern.x;
                 const y = lantern.y;
 
-                // Candle
-                this.renderCandle(x, y + lantern.height, lantern.glowColor);
-
-                // Base
+                // Base (gold with micro-3D)
+                ctx.save();
+                ctx.shadowColor = 'rgba(0, 0, 0, 0.3)';
+                ctx.shadowBlur = 8;
+                ctx.shadowOffsetY = 3;
                 ctx.fillStyle = this.colors.lanternGold;
                 ctx.beginPath();
                 ctx.arc(x, y + lantern.height, 15, 0, Math.PI * 2);
                 ctx.fill();
+                ctx.restore();
 
-                // Stand
+                // Highlight on base
+                ctx.fillStyle = 'rgba(255, 255, 200, 0.4)';
+                ctx.beginPath();
+                ctx.arc(x - 3, y + lantern.height - 3, 8, 0, Math.PI * 2);
+                ctx.fill();
+
+                // Vertical stand (static, doesn't rotate)
                 ctx.strokeStyle = this.colors.lanternGold;
-                ctx.lineWidth = 2;
+                ctx.lineWidth = 2.5;
                 ctx.beginPath();
                 ctx.moveTo(x, y + lantern.height);
                 ctx.lineTo(x, y);
                 ctx.stroke();
 
-                // Top ring (elliptical perspective)
+                // Inner shadow on stand
+                ctx.strokeStyle = 'rgba(200, 160, 30, 0.5)';
+                ctx.lineWidth = 1;
+                ctx.beginPath();
+                ctx.moveTo(x + 1, y + lantern.height);
+                ctx.lineTo(x + 1, y);
+                ctx.stroke();
+
+                // Top ring (elliptical perspective - rotates)
                 ctx.save();
                 ctx.translate(x, y);
                 ctx.scale(1, 0.3);
+
+                // Outer ring
                 ctx.strokeStyle = this.colors.lanternGold;
                 ctx.lineWidth = 3;
                 ctx.beginPath();
                 ctx.arc(0, 0, 50, 0, Math.PI * 2);
                 ctx.stroke();
+
+                // Inner shadow
+                ctx.strokeStyle = 'rgba(200, 160, 30, 0.6)';
+                ctx.lineWidth = 1.5;
+                ctx.beginPath();
+                ctx.arc(0, 0, 48, 0, Math.PI * 2);
+                ctx.stroke();
+
+                // Inner ring
+                ctx.strokeStyle = this.colors.lanternGold;
+                ctx.lineWidth = 2;
                 ctx.beginPath();
                 ctx.arc(0, 0, 45, 0, Math.PI * 2);
                 ctx.stroke();
+
+                // Highlight arc
+                ctx.strokeStyle = 'rgba(255, 255, 200, 0.6)';
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                ctx.arc(0, 0, 50, Math.PI * 1.2, Math.PI * 1.5);
+                ctx.stroke();
+
                 ctx.restore();
 
-                // 6 charms
+                // 6 charms (rotate with ring)
                 for (let i = 0; i < 6; i++) {
                     const angle = lantern.rotation + (i / 6) * Math.PI * 2;
                     const mountX = x + Math.cos(angle) * 38;
@@ -585,13 +670,15 @@
                     const charmX = mountX;
                     const charmY = y + 60;
 
-                    ctx.strokeStyle = 'rgba(180, 160, 100, 0.8)';
+                    // Wire
+                    ctx.strokeStyle = 'rgba(200, 180, 120, 0.9)';
                     ctx.lineWidth = 1;
                     ctx.beginPath();
                     ctx.moveTo(mountX, mountY);
                     ctx.lineTo(charmX, charmY);
                     ctx.stroke();
 
+                    // Charm
                     ctx.save();
                     ctx.translate(charmX, charmY);
                     ctx.scale(0.08, 0.08);
@@ -605,72 +692,116 @@
                 const ctx = this.ctx;
                 const x = lantern.x;
                 const y = lantern.y;
-
-                // Candle
-                this.renderCandle(x, y + lantern.height, lantern.glowColor);
-
-                // Hexagonal body with pseudo-3D
                 const size = 40;
 
+                // Hexagonal frame with micro-3D
+                const hexPoints = [
+                    { x: x, y: y - size },
+                    { x: x + size * 0.5, y: y - size * 0.5 },
+                    { x: x + size * 0.5, y: y + size * 0.5 },
+                    { x: x, y: y + size },
+                    { x: x - size * 0.5, y: y + size * 0.5 },
+                    { x: x - size * 0.5, y: y - size * 0.5 }
+                ];
+
                 // Back faces (darker)
-                ctx.fillStyle = 'rgba(100, 90, 70, 0.6)';
-                ctx.beginPath();
-                ctx.moveTo(x, y - size);
-                ctx.lineTo(x + size * 0.5, y - size * 0.5);
-                ctx.lineTo(x + size * 0.5, y + size * 0.5);
-                ctx.lineTo(x, y + size);
-                ctx.closePath();
-                ctx.fill();
+                for (let i = 1; i <= 3; i++) {
+                    ctx.fillStyle = 'rgba(120, 100, 70, 0.5)';
+                    ctx.beginPath();
+                    ctx.moveTo(x, y);
+                    ctx.lineTo(hexPoints[i].x, hexPoints[i].y);
+                    ctx.lineTo(hexPoints[(i + 1) % 6].x, hexPoints[(i + 1) % 6].y);
+                    ctx.closePath();
+                    ctx.fill();
+                }
 
-                // Front faces (lighter with glow)
-                ctx.fillStyle = lantern.glowColor;
-                ctx.globalAlpha = 0.3;
-                ctx.beginPath();
-                ctx.moveTo(x, y - size);
-                ctx.lineTo(x - size * 0.5, y - size * 0.5);
-                ctx.lineTo(x - size * 0.5, y + size * 0.5);
-                ctx.lineTo(x, y + size);
-                ctx.closePath();
-                ctx.fill();
-                ctx.globalAlpha = 1;
+                // Front faces (with glow)
+                for (let i = 4; i <= 6; i++) {
+                    const idx = i % 6;
+                    ctx.save();
+                    ctx.fillStyle = lantern.glowColor;
+                    ctx.globalAlpha = 0.35;
+                    ctx.beginPath();
+                    ctx.moveTo(x, y);
+                    ctx.lineTo(hexPoints[idx].x, hexPoints[idx].y);
+                    ctx.lineTo(hexPoints[(idx + 1) % 6].x, hexPoints[(idx + 1) % 6].y);
+                    ctx.closePath();
+                    ctx.fill();
+                    ctx.restore();
+                }
 
-                // Outline
+                // Gold frame outline
                 ctx.strokeStyle = this.colors.lanternGold;
-                ctx.lineWidth = 2;
+                ctx.lineWidth = 2.5;
                 ctx.beginPath();
-                ctx.moveTo(x, y - size);
-                ctx.lineTo(x + size * 0.5, y - size * 0.5);
-                ctx.lineTo(x + size * 0.5, y + size * 0.5);
-                ctx.lineTo(x, y + size);
-                ctx.lineTo(x - size * 0.5, y + size * 0.5);
-                ctx.lineTo(x - size * 0.5, y - size * 0.5);
+                ctx.moveTo(hexPoints[0].x, hexPoints[0].y);
+                for (let i = 1; i < 6; i++) {
+                    ctx.lineTo(hexPoints[i].x, hexPoints[i].y);
+                }
                 ctx.closePath();
                 ctx.stroke();
+
+                // Inner bevels
+                ctx.strokeStyle = 'rgba(200, 160, 30, 0.7)';
+                ctx.lineWidth = 1;
+                ctx.beginPath();
+                ctx.moveTo(x, y - size * 0.8);
+                for (let i = 1; i < 6; i++) {
+                    const angle = (i / 6) * Math.PI * 2 - Math.PI / 2;
+                    ctx.lineTo(x + Math.cos(angle) * size * 0.8, y + Math.sin(angle) * size * 0.8);
+                }
+                ctx.closePath();
+                ctx.stroke();
+
+                // Silhouettes on each face
+                for (let i = 0; i < 6; i++) {
+                    const angle = (i / 6) * Math.PI * 2 - Math.PI / 2 + lantern.rotation;
+                    const faceX = x + Math.cos(angle) * size * 0.5;
+                    const faceY = y + Math.sin(angle) * size * 0.5;
+
+                    ctx.save();
+                    ctx.translate(faceX, faceY);
+                    ctx.scale(0.05, 0.05);
+                    ctx.translate(-150, -150);
+                    ctx.globalAlpha = 0.6;
+                    ctx.drawImage(lantern.silhouette, 0, 0);
+                    ctx.restore();
+                }
             },
 
             renderCandle(x, y, glowColor) {
                 const ctx = this.ctx;
-                const pulse = Math.sin(this.time * 4) * 0.1 + 0.9;
+                const pulse = Math.sin(this.time * 4) * 0.08 + 0.92;
 
                 // Candle glow
                 ctx.save();
-                ctx.globalAlpha = 0.4 * pulse;
-                ctx.filter = 'blur(25px)';
-                const gradient = ctx.createRadialGradient(x, y, 0, x, y, 60);
+                ctx.globalAlpha = 0.35 * pulse;
+                ctx.filter = 'blur(30px)';
+                const gradient = ctx.createRadialGradient(x, y, 0, x, y, 70);
                 gradient.addColorStop(0, glowColor);
                 gradient.addColorStop(1, 'rgba(255, 220, 83, 0)');
                 ctx.fillStyle = gradient;
-                ctx.fillRect(x - 60, y - 60, 120, 120);
+                ctx.fillRect(x - 70, y - 70, 140, 140);
                 ctx.restore();
 
                 // Candle body
                 ctx.fillStyle = '#E8D5B7';
                 ctx.fillRect(x - 4, y - 5, 8, 15);
 
+                // Candle shadow
+                ctx.fillStyle = 'rgba(150, 130, 100, 0.3)';
+                ctx.fillRect(x - 3, y - 5, 1, 15);
+
                 // Flame
                 ctx.fillStyle = '#FFD700';
                 ctx.beginPath();
                 ctx.ellipse(x, y - 8, 3, 5 * pulse, 0, 0, Math.PI * 2);
+                ctx.fill();
+
+                // Flame highlight
+                ctx.fillStyle = '#FFF8DC';
+                ctx.beginPath();
+                ctx.ellipse(x - 1, y - 9, 1.5, 2.5 * pulse, 0, 0, Math.PI * 2);
                 ctx.fill();
             },
 
@@ -702,16 +833,54 @@
 
             renderDarkOverlay() {
                 const ctx = this.ctx;
-                ctx.fillStyle = 'rgba(0, 0, 0, 0.15)';
+                ctx.fillStyle = 'rgba(0, 0, 0, 0.20)';
                 ctx.fillRect(0, 0, this.width, this.height);
+            },
+
+            renderFocusedView() {
+                const lantern = this.focusedLantern;
+
+                // Dark background
+                this.ctx.fillStyle = 'rgba(0, 0, 0, 0.85)';
+                this.ctx.fillRect(0, 0, this.width, this.height);
+
+                // Render only this lantern and its shadow
+                const centerX = this.width * 0.3;
+                const centerY = this.height * 0.5;
+
+                this.ctx.save();
+                this.ctx.translate(centerX - lantern.x, centerY - lantern.y);
+
+                // Shadow
+                const wallX = this.width * 0.65;
+                if (lantern.type === 'carousel') {
+                    this.renderCarouselShadows(lantern, wallX);
+                } else {
+                    this.renderHexagonalShadows(lantern, wallX);
+                }
+
+                // Lantern
+                this.renderCandle(lantern.x, lantern.y + lantern.height, lantern.glowColor);
+
+                if (lantern.type === 'carousel') {
+                    this.renderCarouselLantern(lantern);
+                } else {
+                    this.renderHexagonalLantern(lantern);
+                }
+
+                this.ctx.restore();
+
+                // Instructions
+                this.ctx.fillStyle = 'rgba(255, 252, 241, 0.7)';
+                this.ctx.font = '14px sans-serif';
+                this.ctx.textAlign = 'center';
+                this.ctx.fillText('Double-click anywhere to return', this.width / 2, this.height - 40);
             },
 
             updatePhysics() {
                 for (let lantern of this.lanterns) {
-                    if (lantern.type === 'carousel') {
-                        lantern.rotation += lantern.rotationSpeed;
-                        lantern.rotationSpeed *= 0.94;
-                    }
+                    lantern.rotation += lantern.rotationSpeed;
+                    lantern.rotationSpeed *= 0.94;
                 }
             }
         };
