@@ -200,7 +200,7 @@
             isRotatingView: false,
             lastMouseX: 0,
             lastMouseY: 0,
-            lookRotation: { yaw: 0, pitch: 0 }, // First-person look angles
+            lookRotation: { yaw: -Math.PI / 2, pitch: 0 }, // Start facing back wall (toward -Z)
             maxPitchUp: Math.PI * 55 / 180, // +55 degrees
             maxPitchDown: -Math.PI * 45 / 180, // -45 degrees
 
@@ -939,9 +939,32 @@
                 this.isRotatingView = false;
             },
 
+            updateGlowingPointPosition() {
+                if (!this.glowingPoint) return;
+
+                // Calculate horizontal look direction (ignore vertical component)
+                const lookX = Math.cos(this.lookRotation.yaw);
+                const lookZ = Math.sin(this.lookRotation.yaw);
+
+                // Place dot 2.5 meters in front of camera on floor
+                const distance = 2.5;
+                const dotX = this.camera.position.x + lookX * distance;
+                const dotZ = this.camera.position.z + lookZ * distance;
+
+                // Keep within room bounds (with margin from walls)
+                const { width, depth } = this.roomSize;
+                const margin = 2.0; // Stay 2m from walls
+
+                const clampedX = Math.max(-width / 2 + margin, Math.min(width / 2 - margin, dotX));
+                const clampedZ = Math.max(-depth / 2 + margin, Math.min(depth / 2 - margin, dotZ));
+
+                this.glowingPoint.position.set(clampedX, 0.15, clampedZ);
+            },
+
             updateCameraPosition() {
-                // Fixed first-person camera at center of gallery at eye level
-                this.camera.position.set(0, 1.6, 0);
+                // Fixed first-person camera near back wall, facing forward
+                // This gives user a wide view of front wall and open floor space
+                this.camera.position.set(0, 1.6, 4.0);
 
                 // Calculate look direction from yaw and pitch
                 const lookX = Math.cos(this.lookRotation.yaw) * Math.cos(this.lookRotation.pitch);
@@ -954,6 +977,9 @@
                     this.camera.position.y + lookY,
                     this.camera.position.z + lookZ
                 );
+
+                // Update glowing point position to stay in front of user
+                this.updateGlowingPointPosition();
             },
 
             onResize() {
