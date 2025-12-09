@@ -155,22 +155,15 @@
 <body>
     <div id="canvas-container"></div>
 
-    <div id="ui-overlay">
-        <!-- Camera mode toggle -->
-        <div id="camera-toggle" style="position: absolute; top: 20px; right: 20px; cursor: pointer; background: rgba(255,255,255,0.9); padding: 12px; border-radius: 50%; width: 48px; height: 48px; display: flex; align-items: center; justify-content: center; box-shadow: 0 2px 12px rgba(0,0,0,0.15);">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
-                <circle cx="12" cy="12" r="3"></circle>
-            </svg>
-        </div>
-    </div>
+    <div id="ui-overlay"></div>
 
     <!-- Choice Menu (appears when clicking glowing point) -->
     <div id="choiceMenu" style="position: absolute; display: none; flex-direction: column; gap: 12px; padding: 20px; background: rgba(255,255,255,0.95); border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.2); z-index: 150;">
         <div style="font-size: 14px; font-weight: 600; color: #333; margin-bottom: 8px; text-align: center;">Add Object</div>
-        <button class="choice-btn" onclick="app.createCarousel()" style="padding: 12px 24px; background: #2c2c2c; color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 13px; transition: all 0.2s;">Carousel</button>
+        <button class="choice-btn" onclick="app.createSpotlight()" style="padding: 12px 24px; background: #2c2c2c; color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 13px; transition: all 0.2s;">Spotlight</button>
         <button class="choice-btn" onclick="app.createPanel()" style="padding: 12px 24px; background: #2c2c2c; color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 13px; transition: all 0.2s;">Panel</button>
-        <button class="choice-btn" onclick="app.createLight()" style="padding: 12px 24px; background: #2c2c2c; color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 13px; transition: all 0.2s;">Spotlight</button>
+        <button class="choice-btn" onclick="app.createCarousel()" style="padding: 12px 24px; background: #2c2c2c; color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 13px; transition: all 0.2s;">Carousel</button>
+        <button class="choice-btn" onclick="app.createHexLantern()" style="padding: 12px 24px; background: #2c2c2c; color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 13px; transition: all 0.2s;">Six-Sided Lantern</button>
     </div>
 
     <div id="drawing-interface">
@@ -179,7 +172,7 @@
     </div>
 
     <div id="instructions">
-        Drag to rotate camera • Click objects to select • Drag selected objects to move
+        Drag to look around • Click glowing point to add objects • Drag objects to move/rotate
     </div>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
@@ -204,13 +197,12 @@
 
             // Interaction
             isDragging: false,
-            isRotatingCamera: false,
+            isRotatingView: false,
             lastMouseX: 0,
             lastMouseY: 0,
-            cameraRotation: { theta: Math.PI / 4, phi: Math.PI / 6 },
-            cameraDistance: 25,
-            cameraMode: 'editing', // 'editing' or 'immersive'
-            editingCameraState: null,
+            lookRotation: { yaw: 0, pitch: 0 }, // First-person look angles
+            maxPitchUp: Math.PI * 55 / 180, // +55 degrees
+            maxPitchDown: -Math.PI * 45 / 180, // -45 degrees
 
             // Glowing point
             glowingPoint: null,
@@ -263,9 +255,6 @@
 
                 // Event listeners
                 this.setupEventListeners();
-
-                // Camera toggle
-                document.getElementById('camera-toggle').addEventListener('click', () => this.toggleCameraMode());
 
                 // Start animation
                 this.animate();
@@ -336,10 +325,53 @@
                 this.scene.add(ambientLight);
 
                 // Add a default white spotlight
-                const defaultSpotlight = this.createSpotlight();
+                const defaultSpotlight = this.createSpotlightObject();
                 defaultSpotlight.position.set(-3, 0, 6);
                 this.scene.add(defaultSpotlight);
                 this.spotlights.push(defaultSpotlight);
+            },
+
+            getWallFacing() {
+                // Determine which wall user is looking at based on camera direction
+                const lookX = Math.cos(this.lookRotation.yaw) * Math.cos(this.lookRotation.pitch);
+                const lookY = Math.sin(this.lookRotation.pitch);
+                const lookZ = Math.sin(this.lookRotation.yaw) * Math.cos(this.lookRotation.pitch);
+
+                // Don't spawn if looking at floor or ceiling
+                if (Math.abs(lookY) > 0.7) {
+                    return null; // Looking too far up or down
+                }
+
+                // Determine which wall based on strongest horizontal component
+                const absX = Math.abs(lookX);
+                const absZ = Math.abs(lookZ);
+
+                if (absX > absZ) {
+                    // Looking more in X direction
+                    return lookX > 0 ? 'right' : 'left';
+                } else {
+                    // Looking more in Z direction
+                    return lookZ > 0 ? 'front' : 'back';
+                }
+            },
+
+            getPositionForWall(wall) {
+                // Get spawn position in front of the specified wall
+                const { width, depth } = this.roomSize;
+                const distance = 3; // Distance from wall
+
+                switch (wall) {
+                    case 'back':
+                        return { x: 0, z: -depth / 2 + distance, rotation: 0 };
+                    case 'front':
+                        return { x: 0, z: depth / 2 - distance, rotation: Math.PI };
+                    case 'left':
+                        return { x: -width / 2 + distance, z: 0, rotation: Math.PI / 2 };
+                    case 'right':
+                        return { x: width / 2 - distance, z: 0, rotation: -Math.PI / 2 };
+                    default:
+                        return { x: 0, z: 0, rotation: 0 };
+                }
             },
 
             createGlowingPoint() {
@@ -368,31 +400,6 @@
                 this.glowingPoint.add(glow);
             },
 
-            toggleCameraMode() {
-                if (this.cameraMode === 'editing') {
-                    // Save editing camera state
-                    this.editingCameraState = {
-                        theta: this.cameraRotation.theta,
-                        phi: this.cameraRotation.phi,
-                        distance: this.cameraDistance
-                    };
-
-                    // Switch to immersive mode (human height in center)
-                    this.cameraMode = 'immersive';
-                    this.camera.position.set(0, 1.6, 0); // Eye level
-                    this.cameraRotation.theta = 0;
-                    this.cameraRotation.phi = Math.PI / 2;
-                } else {
-                    // Restore editing mode
-                    this.cameraMode = 'editing';
-                    if (this.editingCameraState) {
-                        this.cameraRotation.theta = this.editingCameraState.theta;
-                        this.cameraRotation.phi = this.editingCameraState.phi;
-                        this.cameraDistance = this.editingCameraState.distance;
-                    }
-                    this.updateCameraPosition();
-                }
-            },
 
             createCarousel() {
                 document.getElementById('choiceMenu').style.display = 'none';
@@ -406,12 +413,52 @@
                 this.startDrawing();
             },
 
-            createLight() {
+            createSpotlight() {
                 document.getElementById('choiceMenu').style.display = 'none';
-                const spotlight = this.createSpotlight();
-                spotlight.position.copy(this.glowingPointPosition);
+
+                // Get which wall user is facing
+                const wall = this.getWallFacing();
+                if (!wall) {
+                    alert('Please look at a wall (not floor or ceiling) to place spotlight');
+                    return;
+                }
+
+                const position = this.getPositionForWall(wall);
+                const spotlight = this.createSpotlightObject();
+
+                // Position on floor near wall
+                spotlight.position.set(position.x, 0, position.z);
+
+                // Aim toward the wall
+                const wallTarget = this.getWallTargetPosition(wall);
+                spotlight.userData.light.target.position.set(wallTarget.x, wallTarget.y, wallTarget.z);
+
                 this.scene.add(spotlight);
                 this.spotlights.push(spotlight);
+            },
+
+            getWallTargetPosition(wall) {
+                // Get position on the wall to aim spotlight at
+                const { width, height, depth } = this.roomSize;
+
+                switch (wall) {
+                    case 'back':
+                        return { x: 0, y: height / 2, z: -depth / 2 };
+                    case 'front':
+                        return { x: 0, y: height / 2, z: depth / 2 };
+                    case 'left':
+                        return { x: -width / 2, y: height / 2, z: 0 };
+                    case 'right':
+                        return { x: width / 2, y: height / 2, z: 0 };
+                    default:
+                        return { x: 0, y: height / 2, z: 0 };
+                }
+            },
+
+            createHexLantern() {
+                document.getElementById('choiceMenu').style.display = 'none';
+                this.placementMode = 'hexlantern';
+                this.startDrawing();
             },
 
             createCarouselFromDrawing() {
@@ -495,7 +542,91 @@
                 return group;
             },
 
-            createSpotlight() {
+            createHexLanternFromDrawing() {
+                // Create texture from drawing with transparency
+                const canvas = document.createElement('canvas');
+                canvas.width = 512;
+                canvas.height = 512;
+                const ctx = canvas.getContext('2d');
+
+                ctx.clearRect(0, 0, 512, 512);
+                ctx.fillStyle = 'black';
+                ctx.beginPath();
+                this.drawingPoints.forEach((point, i) => {
+                    const x = (point.x / 400) * 512;
+                    const y = (point.y / 400) * 512;
+                    if (i === 0) ctx.moveTo(x, y);
+                    else ctx.lineTo(x, y);
+                });
+                ctx.closePath();
+                ctx.fill();
+
+                const texture = new THREE.CanvasTexture(canvas);
+
+                const group = new THREE.Group();
+                group.userData.type = 'hexlantern';
+                group.userData.rotation = 0;
+                group.userData.angularVelocity = 0;
+                group.userData.currentFrame = 0;
+
+                // Base (metallic silver)
+                const baseGeometry = new THREE.CylinderGeometry(0.4, 0.4, 0.1, 6);
+                const baseMaterial = new THREE.MeshStandardMaterial({
+                    color: 0xc0c0c0,
+                    metalness: 0.9,
+                    roughness: 0.2
+                });
+                const base = new THREE.Mesh(baseGeometry, baseMaterial);
+                base.position.y = 0.05;
+                base.castShadow = true;
+                group.add(base);
+
+                // Central axis (metallic silver)
+                const axisGeometry = new THREE.CylinderGeometry(0.03, 0.03, 2.5, 6);
+                const axis = new THREE.Mesh(axisGeometry, baseMaterial);
+                axis.position.y = 1.25;
+                axis.castShadow = true;
+                group.add(axis);
+
+                // Rotating panel group (6 sides - hexagon)
+                const panelsGroup = new THREE.Group();
+                panelsGroup.position.y = 1.5;
+
+                const numSides = 6;
+                const radius = 0.8;
+
+                // Generate 6 frames (for now, just use the same drawing on all sides)
+                // TODO: Implement frame interpolation for animation
+                for (let i = 0; i < numSides; i++) {
+                    const angle = (i / numSides) * Math.PI * 2;
+
+                    const panelGeometry = new THREE.PlaneGeometry(0.7, 1.5);
+                    const panelMaterial = new THREE.MeshStandardMaterial({
+                        map: texture.clone(),
+                        side: THREE.DoubleSide,
+                        transparent: true,
+                        alphaTest: 0.1
+                    });
+
+                    const panel = new THREE.Mesh(panelGeometry, panelMaterial);
+                    panel.position.set(
+                        Math.cos(angle) * radius,
+                        0,
+                        Math.sin(angle) * radius
+                    );
+                    panel.rotation.y = angle + Math.PI / 2;
+                    panel.castShadow = true;
+
+                    panelsGroup.add(panel);
+                }
+
+                group.add(panelsGroup);
+                group.userData.panelsGroup = panelsGroup;
+
+                return group;
+            },
+
+            createSpotlightObject() {
                 const group = new THREE.Group();
                 group.userData.type = 'spotlight';
                 group.userData.angle = Math.PI / 6;
@@ -546,24 +677,33 @@
             finishDrawing() {
                 if (this.drawingPoints.length < 3) return;
 
+                // Get which wall user is facing
+                const wall = this.getWallFacing();
+                if (!wall) {
+                    alert('Please look at a wall (not floor or ceiling) to place objects');
+                    return;
+                }
+
+                const position = this.getPositionForWall(wall);
+
                 if (this.placementMode === 'carousel') {
                     const carousel = this.createCarouselFromDrawing();
-                    carousel.position.set(
-                        (Math.random() - 0.5) * 8,
-                        0,
-                        (Math.random() - 0.5) * 8
-                    );
+                    carousel.position.set(position.x, 0, position.z);
+                    carousel.rotation.y = position.rotation;
                     this.scene.add(carousel);
                     this.carousels.push(carousel);
-                } else {
+                } else if (this.placementMode === 'panel') {
                     const panel = this.createPanelFromDrawing();
-                    panel.position.set(
-                        (Math.random() - 0.5) * 8,
-                        0,
-                        (Math.random() - 0.5) * 8
-                    );
+                    panel.position.set(position.x, 0, position.z);
+                    panel.rotation.y = position.rotation;
                     this.scene.add(panel);
                     this.panels.push(panel);
+                } else if (this.placementMode === 'hexlantern') {
+                    const lantern = this.createHexLanternFromDrawing();
+                    lantern.position.set(position.x, 0, position.z);
+                    lantern.rotation.y = position.rotation;
+                    this.scene.add(lantern);
+                    this.carousels.push(lantern); // Store with carousels (similar behavior)
                 }
 
                 this.placementMode = null;
@@ -736,7 +876,7 @@
                     }
                     this.isDragging = true;
                 } else {
-                    this.isRotatingCamera = true;
+                    this.isRotatingView = true;
                     this.selectedObject = null;
                     this.selectedLight = null;
                 }
@@ -749,18 +889,23 @@
                 const deltaX = e.clientX - this.lastMouseX;
                 const deltaY = e.clientY - this.lastMouseY;
 
-                if (this.isRotatingCamera) {
-                    this.cameraRotation.theta -= deltaX * 0.005;
-                    this.cameraRotation.phi = Math.max(
-                        0.1,
-                        Math.min(Math.PI / 2 - 0.1, this.cameraRotation.phi - deltaY * 0.005)
+                if (this.isRotatingView) {
+                    // Update yaw (full 360°)
+                    this.lookRotation.yaw -= deltaX * 0.003;
+
+                    // Update pitch (limited +55°/-45°)
+                    this.lookRotation.pitch += deltaY * 0.003;
+                    this.lookRotation.pitch = Math.max(
+                        this.maxPitchDown,
+                        Math.min(this.maxPitchUp, this.lookRotation.pitch)
                     );
+
                     this.updateCameraPosition();
                 } else if (this.isDragging && (this.selectedObject || this.selectedLight)) {
                     const obj = this.selectedObject || this.selectedLight;
 
-                    // Handle carousel rotation with deltaX
-                    if (obj.userData.type === 'carousel') {
+                    // Handle carousel and hexlantern rotation with deltaX
+                    if (obj.userData.type === 'carousel' || obj.userData.type === 'hexlantern') {
                         // Add angular velocity based on horizontal drag
                         obj.userData.angularVelocity = deltaX * 0.003;
                     }
@@ -791,29 +936,24 @@
 
             onMouseUp() {
                 this.isDragging = false;
-                this.isRotatingCamera = false;
+                this.isRotatingView = false;
             },
 
             updateCameraPosition() {
-                if (this.cameraMode === 'immersive') {
-                    // Immersive mode - look around from center
-                    const lookDistance = 5;
-                    const lookX = Math.cos(this.cameraRotation.theta) * Math.sin(this.cameraRotation.phi) * lookDistance;
-                    const lookY = Math.cos(this.cameraRotation.phi) * lookDistance;
-                    const lookZ = Math.sin(this.cameraRotation.theta) * Math.sin(this.cameraRotation.phi) * lookDistance;
-                    this.camera.lookAt(lookX, lookY + 1.6, lookZ);
-                } else {
-                    // Editing mode - orbit camera
-                    const theta = this.cameraRotation.theta;
-                    const phi = this.cameraRotation.phi;
-                    const radius = this.cameraDistance;
+                // Fixed first-person camera at center of gallery at eye level
+                this.camera.position.set(0, 1.6, 0);
 
-                    this.camera.position.x = radius * Math.sin(phi) * Math.cos(theta);
-                    this.camera.position.y = radius * Math.cos(phi);
-                    this.camera.position.z = radius * Math.sin(phi) * Math.sin(theta);
+                // Calculate look direction from yaw and pitch
+                const lookX = Math.cos(this.lookRotation.yaw) * Math.cos(this.lookRotation.pitch);
+                const lookY = Math.sin(this.lookRotation.pitch);
+                const lookZ = Math.sin(this.lookRotation.yaw) * Math.cos(this.lookRotation.pitch);
 
-                    this.camera.lookAt(0, 2, 0);
-                }
+                // Set camera to look in that direction
+                this.camera.lookAt(
+                    this.camera.position.x + lookX,
+                    this.camera.position.y + lookY,
+                    this.camera.position.z + lookZ
+                );
             },
 
             onResize() {
