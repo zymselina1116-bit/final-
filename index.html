@@ -167,12 +167,19 @@
     </div>
 
     <div id="drawing-interface">
+        <div style="margin-bottom: 20px; text-align: center;">
+            <div style="font-size: 13px; font-weight: 600; color: white; margin-bottom: 12px; text-transform: uppercase; letter-spacing: 0.5px;">Panel Material</div>
+            <div style="display: flex; gap: 12px; justify-content: center;">
+                <button id="materialNormal" class="material-btn" onclick="app.selectPanelMaterial('normal')" style="padding: 10px 24px; background: white; color: #2c2c2c; border: 2px solid white; border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: 600;">Normal (Cloth)</button>
+                <button id="materialLaser" class="material-btn" onclick="app.selectPanelMaterial('laser')" style="padding: 10px 24px; background: transparent; color: white; border: 2px solid white; border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: 600;">Laser (Holographic)</button>
+            </div>
+        </div>
         <canvas id="drawingCanvas" width="400" height="400"></canvas>
         <button class="draw-button" onclick="app.finishDrawing()">Create Panel</button>
     </div>
 
     <div id="instructions">
-        Drag to look around • Click glowing point to add objects • Drag objects to move/rotate
+        Click glowing point to add objects • Drag objects to move/rotate
     </div>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
@@ -213,6 +220,7 @@
             drawingCtx: null,
             isDrawing: false,
             drawingPoints: [],
+            panelMaterial: 'normal', // 'normal' or 'laser'
 
             // Colors
             lightColors: [
@@ -385,7 +393,7 @@
                     roughness: 0.2
                 });
                 this.glowingPoint = new THREE.Mesh(geometry, material);
-                this.glowingPoint.position.set(0, 0.15, 0);
+                this.glowingPoint.position.set(0, 0.15, -2); // Fixed position in center-front
                 this.glowingPoint.userData.type = 'glowingPoint';
                 this.scene.add(this.glowingPoint);
 
@@ -410,7 +418,31 @@
             createPanel() {
                 document.getElementById('choiceMenu').style.display = 'none';
                 this.placementMode = 'panel';
+                this.panelMaterial = 'normal'; // Reset to default
+                this.updateMaterialButtons();
                 this.startDrawing();
+            },
+
+            selectPanelMaterial(material) {
+                this.panelMaterial = material;
+                this.updateMaterialButtons();
+            },
+
+            updateMaterialButtons() {
+                const normalBtn = document.getElementById('materialNormal');
+                const laserBtn = document.getElementById('materialLaser');
+
+                if (this.panelMaterial === 'normal') {
+                    normalBtn.style.background = 'white';
+                    normalBtn.style.color = '#2c2c2c';
+                    laserBtn.style.background = 'transparent';
+                    laserBtn.style.color = 'white';
+                } else {
+                    normalBtn.style.background = 'transparent';
+                    normalBtn.style.color = 'white';
+                    laserBtn.style.background = 'white';
+                    laserBtn.style.color = '#2c2c2c';
+                }
             },
 
             createSpotlight() {
@@ -543,50 +575,35 @@
             },
 
             createHexLanternFromDrawing() {
-                // Create texture from drawing with transparency
-                const canvas = document.createElement('canvas');
-                canvas.width = 512;
-                canvas.height = 512;
-                const ctx = canvas.getContext('2d');
-
-                ctx.clearRect(0, 0, 512, 512);
-                ctx.fillStyle = 'black';
-                ctx.beginPath();
-                this.drawingPoints.forEach((point, i) => {
-                    const x = (point.x / 400) * 512;
-                    const y = (point.y / 400) * 512;
-                    if (i === 0) ctx.moveTo(x, y);
-                    else ctx.lineTo(x, y);
-                });
-                ctx.closePath();
-                ctx.fill();
-
-                const texture = new THREE.CanvasTexture(canvas);
-
                 const group = new THREE.Group();
                 group.userData.type = 'hexlantern';
                 group.userData.rotation = 0;
                 group.userData.angularVelocity = 0;
                 group.userData.currentFrame = 0;
 
-                // Base (metallic silver)
-                const baseGeometry = new THREE.CylinderGeometry(0.4, 0.4, 0.1, 6);
+                // Matte material (soft off-white/gold metal) - NOT silver
                 const baseMaterial = new THREE.MeshStandardMaterial({
-                    color: 0xc0c0c0,
-                    metalness: 0.9,
-                    roughness: 0.2
+                    color: 0xf5e6d3, // Soft off-white with gold tint
+                    metalness: 0.3,
+                    roughness: 0.7 // Matte finish
                 });
+
+                // Base (hexagonal)
+                const baseGeometry = new THREE.CylinderGeometry(0.4, 0.4, 0.1, 6);
                 const base = new THREE.Mesh(baseGeometry, baseMaterial);
                 base.position.y = 0.05;
-                base.castShadow = true;
+                base.castShadow = false; // Base doesn't cast important shadow
                 group.add(base);
 
-                // Central axis (metallic silver)
+                // Central axis
                 const axisGeometry = new THREE.CylinderGeometry(0.03, 0.03, 2.5, 6);
                 const axis = new THREE.Mesh(axisGeometry, baseMaterial);
                 axis.position.y = 1.25;
-                axis.castShadow = true;
+                axis.castShadow = false;
                 group.add(axis);
+
+                // Generate 6 animation frames from user's drawing
+                const frames = this.generateZoetropeFrames(this.drawingPoints, 6);
 
                 // Rotating panel group (6 sides - hexagon)
                 const panelsGroup = new THREE.Group();
@@ -595,14 +612,12 @@
                 const numSides = 6;
                 const radius = 0.8;
 
-                // Generate 6 frames (for now, just use the same drawing on all sides)
-                // TODO: Implement frame interpolation for animation
                 for (let i = 0; i < numSides; i++) {
                     const angle = (i / numSides) * Math.PI * 2;
 
                     const panelGeometry = new THREE.PlaneGeometry(0.7, 1.5);
                     const panelMaterial = new THREE.MeshStandardMaterial({
-                        map: texture.clone(),
+                        map: frames[i], // Different frame for each panel
                         side: THREE.DoubleSide,
                         transparent: true,
                         alphaTest: 0.1
@@ -615,7 +630,10 @@
                         Math.sin(angle) * radius
                     );
                     panel.rotation.y = angle + Math.PI / 2;
-                    panel.castShadow = true;
+
+                    // Only first panel casts shadow initially (will cycle in animate)
+                    panel.castShadow = (i === 0);
+                    panel.userData.frameIndex = i;
 
                     panelsGroup.add(panel);
                 }
@@ -624,6 +642,47 @@
                 group.userData.panelsGroup = panelsGroup;
 
                 return group;
+            },
+
+            generateZoetropeFrames(points, numFrames) {
+                // Generate interpolated frames for zoetrope animation
+                // Creates a pulsing/morphing effect from the original drawing
+                const frames = [];
+
+                for (let i = 0; i < numFrames; i++) {
+                    const canvas = document.createElement('canvas');
+                    canvas.width = 512;
+                    canvas.height = 512;
+                    const ctx = canvas.getContext('2d');
+
+                    ctx.clearRect(0, 0, 512, 512);
+                    ctx.fillStyle = 'black';
+
+                    // Calculate scale for this frame (creates pulsing animation)
+                    const t = i / numFrames;
+                    const scale = 0.6 + 0.4 * Math.sin(t * Math.PI * 2); // 60% to 100% scale
+
+                    ctx.save();
+                    ctx.translate(256, 256); // Center
+                    ctx.scale(scale, scale);
+                    ctx.translate(-256, -256);
+
+                    ctx.beginPath();
+                    points.forEach((point, idx) => {
+                        const x = (point.x / 400) * 512;
+                        const y = (point.y / 400) * 512;
+                        if (idx === 0) ctx.moveTo(x, y);
+                        else ctx.lineTo(x, y);
+                    });
+                    ctx.closePath();
+                    ctx.fill();
+
+                    ctx.restore();
+
+                    frames.push(new THREE.CanvasTexture(canvas));
+                }
+
+                return frames;
             },
 
             createSpotlightObject() {
@@ -738,18 +797,42 @@
 
                 const group = new THREE.Group();
                 group.userData.type = 'panel';
+                group.userData.material = this.panelMaterial;
 
-                const geometry = new THREE.PlaneGeometry(3, 3);
-                const material = new THREE.MeshStandardMaterial({
-                    map: texture,
-                    side: THREE.DoubleSide,
-                    transparent: true, // Enable transparency
-                    alphaTest: 0.1, // Cutout threshold
-                    opacity: 1.0
-                });
+                // REDUCED SIZE: 1.5 x 1.5 (50% of original 3x3)
+                const geometry = new THREE.PlaneGeometry(1.5, 1.5);
+
+                // Material based on selection
+                let material;
+                if (this.panelMaterial === 'laser') {
+                    // Holographic laser material with rainbow diffraction
+                    material = new THREE.MeshStandardMaterial({
+                        map: texture,
+                        side: THREE.DoubleSide,
+                        transparent: true,
+                        alphaTest: 0.1,
+                        opacity: 1.0,
+                        metalness: 0.8,
+                        roughness: 0.1,
+                        emissive: 0x4444ff,
+                        emissiveIntensity: 0.2
+                    });
+                } else {
+                    // Normal translucent cloth material
+                    material = new THREE.MeshStandardMaterial({
+                        map: texture,
+                        side: THREE.DoubleSide,
+                        transparent: true,
+                        alphaTest: 0.1,
+                        opacity: 1.0,
+                        metalness: 0.0,
+                        roughness: 0.8
+                    });
+                }
+
                 const mesh = new THREE.Mesh(geometry, material);
                 // VERTICAL panel (90° perpendicular to floor)
-                mesh.position.y = 1.5; // Center at 1.5m height
+                mesh.position.y = 0.75; // Adjusted for smaller size (half of 1.5)
                 mesh.castShadow = true;
                 mesh.receiveShadow = false;
 
@@ -876,7 +959,6 @@
                     }
                     this.isDragging = true;
                 } else {
-                    this.isRotatingView = true;
                     this.selectedObject = null;
                     this.selectedLight = null;
                 }
@@ -889,19 +971,7 @@
                 const deltaX = e.clientX - this.lastMouseX;
                 const deltaY = e.clientY - this.lastMouseY;
 
-                if (this.isRotatingView) {
-                    // Update yaw (full 360°)
-                    this.lookRotation.yaw -= deltaX * 0.003;
-
-                    // Update pitch (limited +55°/-45°)
-                    this.lookRotation.pitch += deltaY * 0.003;
-                    this.lookRotation.pitch = Math.max(
-                        this.maxPitchDown,
-                        Math.min(this.maxPitchUp, this.lookRotation.pitch)
-                    );
-
-                    this.updateCameraPosition();
-                } else if (this.isDragging && (this.selectedObject || this.selectedLight)) {
+                if (this.isDragging && (this.selectedObject || this.selectedLight)) {
                     const obj = this.selectedObject || this.selectedLight;
 
                     // Handle carousel and hexlantern rotation with deltaX
@@ -936,50 +1006,15 @@
 
             onMouseUp() {
                 this.isDragging = false;
-                this.isRotatingView = false;
-            },
-
-            updateGlowingPointPosition() {
-                if (!this.glowingPoint) return;
-
-                // Calculate horizontal look direction (ignore vertical component)
-                const lookX = Math.cos(this.lookRotation.yaw);
-                const lookZ = Math.sin(this.lookRotation.yaw);
-
-                // Place dot 2.5 meters in front of camera on floor
-                const distance = 2.5;
-                const dotX = this.camera.position.x + lookX * distance;
-                const dotZ = this.camera.position.z + lookZ * distance;
-
-                // Keep within room bounds (with margin from walls)
-                const { width, depth } = this.roomSize;
-                const margin = 2.0; // Stay 2m from walls
-
-                const clampedX = Math.max(-width / 2 + margin, Math.min(width / 2 - margin, dotX));
-                const clampedZ = Math.max(-depth / 2 + margin, Math.min(depth / 2 - margin, dotZ));
-
-                this.glowingPoint.position.set(clampedX, 0.15, clampedZ);
             },
 
             updateCameraPosition() {
-                // Fixed first-person camera near back wall, facing forward
-                // This gives user a wide view of front wall and open floor space
-                this.camera.position.set(0, 1.6, 4.0);
+                // Fixed top-down camera with slight tilt (20-30° downward)
+                // Elevated viewpoint like observing an installation from above
+                this.camera.position.set(0, 12, 10);
 
-                // Calculate look direction from yaw and pitch
-                const lookX = Math.cos(this.lookRotation.yaw) * Math.cos(this.lookRotation.pitch);
-                const lookY = Math.sin(this.lookRotation.pitch);
-                const lookZ = Math.sin(this.lookRotation.yaw) * Math.cos(this.lookRotation.pitch);
-
-                // Set camera to look in that direction
-                this.camera.lookAt(
-                    this.camera.position.x + lookX,
-                    this.camera.position.y + lookY,
-                    this.camera.position.z + lookZ
-                );
-
-                // Update glowing point position to stay in front of user
-                this.updateGlowingPointPosition();
+                // Look at center-front of gallery floor
+                this.camera.lookAt(0, 0, -2);
             },
 
             onResize() {
@@ -1000,10 +1035,23 @@
                     this.glowingPoint.scale.set(pulse, pulse, pulse);
                 }
 
-                // Update carousel rotations with friction
+                // Update carousel and hexlantern rotations with friction
                 this.carousels.forEach(carousel => {
                     if (carousel.userData.panelsGroup && carousel.userData.angularVelocity) {
                         carousel.userData.panelsGroup.rotation.y += carousel.userData.angularVelocity;
+
+                        // For hexlanterns: cycle shadow casting based on rotation (zoetrope effect)
+                        if (carousel.userData.type === 'hexlantern') {
+                            const rotation = carousel.userData.panelsGroup.rotation.y;
+                            const numPanels = carousel.userData.panelsGroup.children.length;
+                            const currentFrameIndex = Math.floor(((rotation % (Math.PI * 2)) / (Math.PI * 2)) * numPanels);
+
+                            // Only the current frame casts shadow
+                            carousel.userData.panelsGroup.children.forEach((panel, idx) => {
+                                panel.castShadow = (idx === currentFrameIndex);
+                            });
+                        }
+
                         // Apply friction (gradual slowdown)
                         carousel.userData.angularVelocity *= 0.96;
                         // Stop when very slow
