@@ -163,7 +163,6 @@
         <button class="choice-btn" onclick="app.createSpotlight()" style="padding: 12px 24px; background: #2c2c2c; color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 13px; transition: all 0.2s;">Spotlight</button>
         <button class="choice-btn" onclick="app.createPanel()" style="padding: 12px 24px; background: #2c2c2c; color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 13px; transition: all 0.2s;">Panel</button>
         <button class="choice-btn" onclick="app.createCarousel()" style="padding: 12px 24px; background: #2c2c2c; color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 13px; transition: all 0.2s;">Carousel</button>
-        <button class="choice-btn" onclick="app.createHexLantern()" style="padding: 12px 24px; background: #2c2c2c; color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 13px; transition: all 0.2s;">Six-Sided Lantern</button>
     </div>
 
     <div id="drawing-interface">
@@ -179,7 +178,7 @@
     </div>
 
     <div id="instructions">
-        Click glowing point to add objects • Drag objects to move/rotate
+        Drag to look around • Click glowing point to add objects • Drag objects to move/rotate
     </div>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
@@ -191,7 +190,7 @@
             container: null,
 
             // Room dimensions
-            roomSize: { width: 20, height: 8, depth: 20 },
+            roomSize: { width: 20, height: 12, depth: 20 }, // Taller ceiling for gallery feel
 
             // Objects
             carousels: [],
@@ -207,9 +206,9 @@
             isRotatingView: false,
             lastMouseX: 0,
             lastMouseY: 0,
-            lookRotation: { yaw: -Math.PI / 2, pitch: 0 }, // Start facing back wall (toward -Z)
-            maxPitchUp: Math.PI * 55 / 180, // +55 degrees
-            maxPitchDown: -Math.PI * 45 / 180, // -45 degrees
+            lookRotation: { yaw: 0, pitch: -Math.PI / 36 }, // Slight downward tilt (-5°)
+            maxYawLeft: Math.PI / 9, // +20 degrees
+            maxYawRight: -Math.PI / 9, // -20 degrees
 
             // Glowing point
             glowingPoint: null,
@@ -328,13 +327,13 @@
                 ceiling.rotation.x = Math.PI / 2;
                 this.scene.add(ceiling);
 
-                // Ambient light (very dim for gallery atmosphere)
-                const ambientLight = new THREE.AmbientLight(0xffffff, 0.25);
+                // Ambient light (soft but visible for white gallery)
+                const ambientLight = new THREE.AmbientLight(0xffffff, 0.4);
                 this.scene.add(ambientLight);
 
                 // Add a default white spotlight
                 const defaultSpotlight = this.createSpotlightObject();
-                defaultSpotlight.position.set(-3, 0, 6);
+                defaultSpotlight.position.set(-2, 0, 0);
                 this.scene.add(defaultSpotlight);
                 this.spotlights.push(defaultSpotlight);
             },
@@ -393,7 +392,7 @@
                     roughness: 0.2
                 });
                 this.glowingPoint = new THREE.Mesh(geometry, material);
-                this.glowingPoint.position.set(0, 0.15, -2); // Fixed position in center-front
+                this.glowingPoint.position.set(0, 0.15, 2); // In front of camera
                 this.glowingPoint.userData.type = 'glowingPoint';
                 this.scene.add(this.glowingPoint);
 
@@ -448,22 +447,14 @@
             createSpotlight() {
                 document.getElementById('choiceMenu').style.display = 'none';
 
-                // Get which wall user is facing
-                const wall = this.getWallFacing();
-                if (!wall) {
-                    alert('Please look at a wall (not floor or ceiling) to place spotlight');
-                    return;
-                }
-
-                const position = this.getPositionForWall(wall);
                 const spotlight = this.createSpotlightObject();
 
-                // Position on floor near wall
-                spotlight.position.set(position.x, 0, position.z);
-
-                // Aim toward the wall
-                const wallTarget = this.getWallTargetPosition(wall);
-                spotlight.userData.light.target.position.set(wallTarget.x, wallTarget.y, wallTarget.z);
+                // Position on floor in center-front area
+                spotlight.position.set(
+                    (Math.random() - 0.5) * 4,
+                    0,
+                    -2 + (Math.random() - 0.5) * 2
+                );
 
                 this.scene.add(spotlight);
                 this.spotlights.push(spotlight);
@@ -736,14 +727,8 @@
             finishDrawing() {
                 if (this.drawingPoints.length < 3) return;
 
-                // Get which wall user is facing
-                const wall = this.getWallFacing();
-                if (!wall) {
-                    alert('Please look at a wall (not floor or ceiling) to place objects');
-                    return;
-                }
-
-                const position = this.getPositionForWall(wall);
+                // Place objects in front of camera
+                const position = { x: 0, z: 2, rotation: 0 };
 
                 if (this.placementMode === 'carousel') {
                     const carousel = this.createCarouselFromDrawing();
@@ -757,12 +742,6 @@
                     panel.rotation.y = position.rotation;
                     this.scene.add(panel);
                     this.panels.push(panel);
-                } else if (this.placementMode === 'hexlantern') {
-                    const lantern = this.createHexLanternFromDrawing();
-                    lantern.position.set(position.x, 0, position.z);
-                    lantern.rotation.y = position.rotation;
-                    this.scene.add(lantern);
-                    this.carousels.push(lantern); // Store with carousels (similar behavior)
                 }
 
                 this.placementMode = null;
@@ -811,11 +790,11 @@
                         side: THREE.DoubleSide,
                         transparent: true,
                         alphaTest: 0.1,
-                        opacity: 1.0,
-                        metalness: 0.8,
-                        roughness: 0.1,
-                        emissive: 0x4444ff,
-                        emissiveIntensity: 0.2
+                        opacity: 0.9,
+                        metalness: 1.0,
+                        roughness: 0.0,
+                        emissive: 0xff00ff, // Magenta for holographic effect
+                        emissiveIntensity: 0.5
                     });
                 } else {
                     // Normal translucent cloth material
@@ -838,6 +817,34 @@
 
                 group.add(mesh);
                 group.userData.mesh = mesh;
+
+                // For laser panels, add rainbow glow layers
+                if (this.panelMaterial === 'laser') {
+                    // Add multiple colored glow meshes for rainbow effect
+                    const colors = [
+                        0xff0000, // Red
+                        0xff7f00, // Orange
+                        0xffff00, // Yellow
+                        0x00ff00, // Green
+                        0x0000ff, // Blue
+                        0x8b00ff  // Violet
+                    ];
+
+                    colors.forEach((color, i) => {
+                        const glowMaterial = new THREE.MeshBasicMaterial({
+                            color: color,
+                            transparent: true,
+                            opacity: 0.15,
+                            side: THREE.DoubleSide
+                        });
+                        const glowMesh = new THREE.Mesh(geometry, glowMaterial);
+                        const offset = (i - 2.5) * 0.02; // Spread out the layers
+                        glowMesh.position.set(offset, 0.75, offset);
+                        glowMesh.scale.set(1.05, 1.05, 1.05);
+                        group.add(glowMesh);
+                    });
+                }
+
                 return group;
             },
 
@@ -959,6 +966,7 @@
                     }
                     this.isDragging = true;
                 } else {
+                    this.isRotatingView = true;
                     this.selectedObject = null;
                     this.selectedLight = null;
                 }
@@ -971,11 +979,19 @@
                 const deltaX = e.clientX - this.lastMouseX;
                 const deltaY = e.clientY - this.lastMouseY;
 
-                if (this.isDragging && (this.selectedObject || this.selectedLight)) {
+                if (this.isRotatingView) {
+                    // Allow yaw rotation (left/right) only, limited to ±20°
+                    this.lookRotation.yaw -= deltaX * 0.003;
+                    this.lookRotation.yaw = Math.max(
+                        this.maxYawRight,
+                        Math.min(this.maxYawLeft, this.lookRotation.yaw)
+                    );
+                    this.updateCameraPosition();
+                } else if (this.isDragging && (this.selectedObject || this.selectedLight)) {
                     const obj = this.selectedObject || this.selectedLight;
 
-                    // Handle carousel and hexlantern rotation with deltaX
-                    if (obj.userData.type === 'carousel' || obj.userData.type === 'hexlantern') {
+                    // Handle carousel rotation with deltaX
+                    if (obj.userData.type === 'carousel') {
                         // Add angular velocity based on horizontal drag
                         obj.userData.angularVelocity = deltaX * 0.003;
                     }
@@ -1006,15 +1022,28 @@
 
             onMouseUp() {
                 this.isDragging = false;
+                this.isRotatingView = false;
             },
 
             updateCameraPosition() {
-                // Fixed top-down camera with slight tilt (20-30° downward)
-                // Elevated viewpoint like observing an installation from above
-                this.camera.position.set(0, 12, 10);
+                // Eye-level camera (human standing in gallery)
+                // Pulled back from center, slight downward tilt
+                const cameraY = 1.6; // Eye level
+                const cameraZ = 8; // Pulled back from center
 
-                // Look at center-front of gallery floor
-                this.camera.lookAt(0, 0, -2);
+                this.camera.position.set(0, cameraY, cameraZ);
+
+                // Calculate look direction from yaw and pitch
+                const lookX = Math.cos(this.lookRotation.yaw) * Math.cos(this.lookRotation.pitch);
+                const lookY = Math.sin(this.lookRotation.pitch);
+                const lookZ = Math.sin(this.lookRotation.yaw) * Math.cos(this.lookRotation.pitch);
+
+                // Set camera to look in that direction
+                this.camera.lookAt(
+                    this.camera.position.x + lookX,
+                    this.camera.position.y + lookY,
+                    this.camera.position.z + lookZ
+                );
             },
 
             onResize() {
@@ -1035,22 +1064,10 @@
                     this.glowingPoint.scale.set(pulse, pulse, pulse);
                 }
 
-                // Update carousel and hexlantern rotations with friction
+                // Update carousel rotations with friction
                 this.carousels.forEach(carousel => {
                     if (carousel.userData.panelsGroup && carousel.userData.angularVelocity) {
                         carousel.userData.panelsGroup.rotation.y += carousel.userData.angularVelocity;
-
-                        // For hexlanterns: cycle shadow casting based on rotation (zoetrope effect)
-                        if (carousel.userData.type === 'hexlantern') {
-                            const rotation = carousel.userData.panelsGroup.rotation.y;
-                            const numPanels = carousel.userData.panelsGroup.children.length;
-                            const currentFrameIndex = Math.floor(((rotation % (Math.PI * 2)) / (Math.PI * 2)) * numPanels);
-
-                            // Only the current frame casts shadow
-                            carousel.userData.panelsGroup.children.forEach((panel, idx) => {
-                                panel.castShadow = (idx === currentFrameIndex);
-                            });
-                        }
 
                         // Apply friction (gradual slowdown)
                         carousel.userData.angularVelocity *= 0.96;
